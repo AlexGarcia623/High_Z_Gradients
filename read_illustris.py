@@ -8,8 +8,10 @@ mpl.use('agg')
 import matplotlib.pyplot as plt
 import illustris_python as il
 
-from sfms import sfmscut, center, calc_rsfr_io, calc_incl, trans, calczgrad, calcrsfr
+from sfms import sfmscut, center, calc_rsfr_io, calc_incl, trans, calczgrad, calcrsfr, grad_valid
 from matplotlib.colors import LogNorm
+from tqdm import tqdm
+
 from os import path, mkdir
 
 xh     = 7.600E-01
@@ -37,7 +39,7 @@ mpl.rcParams['font.size']          = 20
 
 fs_og = 24
 mpl.rcParams['font.size'] = fs_og
-mpl.rcParams['axes.linewidth'] = 4
+mpl.rcParams['axes.linewidth']  = 2
 mpl.rcParams['xtick.direction'] = 'in'
 mpl.rcParams['ytick.direction'] = 'in'
 mpl.rcParams['xtick.minor.visible'] = 'true'
@@ -50,7 +52,7 @@ mpl.rcParams['xtick.major.size']  = 7.5
 mpl.rcParams['ytick.major.size']  = 7.5
 mpl.rcParams['xtick.minor.size']  = 3.5
 mpl.rcParams['ytick.minor.size']  = 3.5
-mpl.rcParams['xtick.top'] = True
+mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
 def save_data(snap, out_dir, m_star_min=9.0, m_star_max=np.inf, m_gas_min=9.0, res=2160,
@@ -82,7 +84,7 @@ def save_data(snap, out_dir, m_star_min=9.0, m_star_max=np.inf, m_gas_min=9.0, r
     
     stellarHalfmassRad *= (scf / h)
     
-    for sub in subs:
+    for sub in tqdm(subs):
         get_profile(out_dir, snap, sub, sub_cat, box_size,
                     scf, h, res, sf_region=True, plot=False,
                     where_to_save=where_to_save)
@@ -135,7 +137,9 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
     
     sub_rsfr50 = calcrsfr(gas_pos, gas_sfr)
 
+    # print('Rows without nans: %s' %len(gas_rho))
     sf_idx = gas_rho > 1.300E-01
+    # print('SF gas particles in this halo: %s' %sum(sf_idx))
     incl   = calc_incl(gas_pos[sf_idx], gas_vel[sf_idx], gas_mass[sf_idx], ri, ro)
 
     gas_pos  = trans(gas_pos, incl)
@@ -146,16 +150,16 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
     if grad_valid(r, oh):
         
         rsmall, rbig = riprime, ro
-        fit_mask     = ( r > rsmall ) & ( r < rbig )
+        fit_mask     = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
         try:
-            gradient_SF, intercept = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
+            gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
         except:
             gradient_SF = np.nan
 
         rsmall, rbig = 0.5 * sub_SHM, 2.0 * sub_SHM
-        fit_mask     = ( r > rsmall ) & ( r < rbig )
+        fit_mask     = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
         try:
-            gradient_OE, intercept = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
+            gradient_OE, intercept_OE = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
         except:
             gradient_OE = np.nan
         
@@ -172,7 +176,7 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
             
             
             _x_ = np.arange( 0, np.max(r), 0.1 )
-            _y_ = gradient * _x_ + intercept
+            _y_ = gradient_SF * _x_ + intercept_SF
             plt.plot( _x_, _y_, color='blue' )
             
             plt.xlabel( r'${\rm Radius}~{\rm (kpc)}$' )
@@ -184,8 +188,8 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
             plt.tight_layout()
             plt.savefig( './diagnostic_figs/' + str(sub) + '_TNG_profile.pdf', bbox_inches='tight' )
     else:
-        print('Sub %s is not valid' %sub)
-
+        gradient_OE = np.nan
+        gradient_SF = np.nan
         
     if where_to_save:
         
@@ -198,18 +202,6 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
         this_subhalo.create_dataset( 'StellarHalfMassRad', data = sub_SHM          )
         this_subhalo.create_dataset( 'SFRHalfMassRad'    , data = sub_rsfr50       )
         this_subhalo.create_dataset( 'Redshift'          , data = snap2zTNG[snap]  )
-        
-def grad_valid(r, oh):
-    
-    good_flag = False
-    
-    criteria1 = ( np.max(r) - np.min(r) ) > 1 # be bigger than 1 kpc
-    criteria2 = (len(r) / ( (np.max(r) - np.min(r)) * 10)) > 0.9 # 90 per cent of region covered
-    
-    if criteria1 & criteria2:
-        good_flag = True
-        
-    return good_flag
     
 if __name__ == "__main__":
     

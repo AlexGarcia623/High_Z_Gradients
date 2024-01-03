@@ -10,12 +10,53 @@ sys.path.insert(1,EAGLE_SQL_TOOLS)
 import eagleSqlTools as sql
 con = sql.connect( "rbs016", password="yigERne4" )
 
-from sfms import sfmscut, center, calc_rsfr_io, calc_incl, trans
+from sfms import sfmscut, center, calc_rsfr_io, calc_incl, trans, calczgrad, calcrsfr, grad_valid
 from tqdm import tqdm
 
-import mpi4py as MPI
-
 from os import path, mkdir
+
+xh = 7.600E-01
+zo = 3.500E-01
+mh = 1.6726219E-24
+kb = 1.3806485E-16
+mc = 1.270E-02
+
+snap2zEAGLE = {
+    28:0,
+    19:1,
+    15:2,
+    12:3,
+    10:4,
+     8:5,
+     6:6,
+     5:7,
+     4:8
+}
+
+ALL_EAGLE_SPECIES = ["Carbon", "Helium", "Hydrogen", "Iron", "Magnesium", "Neon", "Nitrogen", "Oxygen", "Silicon"]
+
+mpl.rcParams['text.usetex']        = True
+mpl.rcParams['text.latex.unicode'] = True
+mpl.rcParams['font.family']        = 'serif'
+mpl.rcParams['font.size']          = 20
+
+fs_og = 24
+mpl.rcParams['font.size'] = fs_og
+mpl.rcParams['axes.linewidth']  = 2
+mpl.rcParams['xtick.direction'] = 'in'
+mpl.rcParams['ytick.direction'] = 'in'
+mpl.rcParams['xtick.minor.visible'] = 'true'
+mpl.rcParams['ytick.minor.visible'] = 'true'
+mpl.rcParams['xtick.major.width'] = 1.5
+mpl.rcParams['ytick.major.width'] = 1.5
+mpl.rcParams['xtick.minor.width'] = 1.0
+mpl.rcParams['ytick.minor.width'] = 1.0
+mpl.rcParams['xtick.major.size']  = 7.5
+mpl.rcParams['ytick.major.size']  = 7.5
+mpl.rcParams['xtick.minor.size']  = 3.5
+mpl.rcParams['ytick.minor.size']  = 3.5
+mpl.rcParams['xtick.top']   = True
+mpl.rcParams['ytick.right'] = True
 
 def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=8.0, m_star_max=10.5, m_gas_min=8.5,
                     verbose=False):
@@ -80,12 +121,18 @@ def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=8.0, m_star
 
 def read_eagle_subhalo(file_path, group_index, snap, keys=['GroupNumber','SubGroupNumber'],
                        PartType=0, nfiles=256, sub_group_index=0, file_ext='z000p000',
-                       run='RefL0100N1504'):
+                       run='RefL0100N1504',species=["Oxygen","Hydrogen"]):
     req_keys = ['GroupNumber','SubGroupNumber']
     for _k in req_keys:
         if _k not in keys:
             keys.append(_k)
-        
+    
+    # Add the tag as many times as needed
+    if "ElementAbundance" in keys:
+        keys.remove("ElementAbundance")
+        for atom in species:
+            keys.append( atom )
+    
     return_dic = {}
     
     galaxy_file_locator = np.load( './%s_SF_galaxies/snap_%s/file_lookup.npy' %(run,str(snap).zfill(3)) ,
@@ -113,12 +160,14 @@ def read_eagle_subhalo(file_path, group_index, snap, keys=['GroupNumber','SubGro
             subhalo_mask_bool = np.zeros_like(subhalo_mask, dtype=bool)
             subhalo_mask_bool[subhalo_indices] = True
 
-            data_dict = {key: mask_array(f[pt][key], subhalo_mask_bool, key) for key in keys}
-
-            for key in keys:                    
-                cgs = f[pt][key].attrs.get('CGSConversionFactor')
-                axp = f[pt][key].attrs.get('aexp-scale-exponent')
-                hxp = f[pt][key].attrs.get('h-scale-exponent')
+            data_dict = {key: mask_array(f[pt], subhalo_mask_bool, key) for key in keys}
+            
+            for key in keys:
+                # Get conversion factor unless its an element
+                if key not in ALL_EAGLE_SPECIES:
+                    cgs = f[pt][key].attrs.get('CGSConversionFactor')
+                    axp = f[pt][key].attrs.get('aexp-scale-exponent')
+                    hxp = f[pt][key].attrs.get('h-scale-exponent')
 
                 if key not in return_dic:
                     return_dic[key] = np.multiply(np.array(data_dict[key]), cgs * a**axp * h ** hxp )
@@ -137,7 +186,14 @@ def read_eagle_subhalo(file_path, group_index, snap, keys=['GroupNumber','SubGro
         
     return return_dic
 
-def mask_array(data, mask, key, chunk_size=5000):
+def mask_array(particle_data, mask, key, chunk_size=5000):
+    # Handles Element Abundance Group 
+    if (key in ALL_EAGLE_SPECIES):
+        data = particle_data["ElementAbundance"][key]
+    else:
+        data = particle_data[key]
+    
+    # Mask the array 
     if (data.ndim > 1):
         result = np.empty_like(data)
         for i in range(0, data.shape[0], chunk_size):
@@ -168,36 +224,28 @@ def get_which_files(file_path, group_indeces, snap, nfiles=256,
     all_files = {gal: np.array(files) for gal, files in all_files.items()}
     np.save(save_loc, all_files)
     
-def reduce_eagle(snap, galaxy, run, file_ext='', EAGLE=''):
-    xh = 7.600E-01
-    zo = 3.500E-01
-    mh = 1.6726219E-24
-    kb = 1.3806485E-16
-    mc = 1.270E-02
+def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080):
+    rmax = 1.00E+02
     
-    DIR = './%s_SF_galaxies/snap_' %run + str(snap).zfill(3) + '/'
-    
-    group_cat = np.load( DIR + 'grp_cat.npy', allow_pickle=True ).item()
-
     sub_vel   = np.column_stack( (group_cat['sub_vel_x'], group_cat['sub_vel_y'], group_cat['sub_vel_z']) )
     sub_pos   = np.column_stack( (group_cat['sub_pos_x'], group_cat['sub_pos_y'], group_cat['sub_pos_z']) )
     sub_grnr  = np.array(group_cat['Grnr'],dtype=int)
     sub_Zgas  = np.array(group_cat['Zgas'])
     sub_Mstar = np.array(group_cat['Stellar_Mass'])
+    sub_RSHM  = np.array(group_cat['RSHM'])
 
     print( 'Doing Galaxy: %s' %galaxy )
 
-    this_sub_vel = sub_vel  [np.where(sub_grnr == galaxy)][0]
-    this_sub_pos = sub_pos  [np.where(sub_grnr == galaxy)][0]
-    this_Zgas    = sub_Zgas [np.where(sub_grnr == galaxy)][0]
-    this_Mstar   = sub_Mstar[np.where(sub_grnr == galaxy)][0]
-
-    print( 'Stellar Mass', np.log10(this_Mstar) )
+    this_sub_vel =          sub_vel  [np.where(sub_grnr == galaxy)][0]
+    this_sub_pos =          sub_pos  [np.where(sub_grnr == galaxy)][0]
+    this_Zgas    =          sub_Zgas [np.where(sub_grnr == galaxy)][0]
+    this_Mstar   = np.log10(sub_Mstar[np.where(sub_grnr == galaxy)][0])
+    this_RSHM    =          sub_RSHM [np.where(sub_grnr == galaxy)][0]
 
     gas_data  = read_eagle_subhalo(EAGLE, galaxy, snap, PartType=0, file_ext=file_ext,
                                    keys=['Coordinates','Mass','Metallicity',
                                          'Density','StarFormationRate','Velocity',
-                                         'OnEquationOfState'], run=run)
+                                         'OnEquationOfState','ElementAbundance'], run=run)
 
     gas_pos   = np.array(gas_data['Coordinates'      ])
     gas_vel   = np.array(gas_data['Velocity'         ])
@@ -209,6 +257,9 @@ def reduce_eagle(snap, galaxy, run, file_ext='', EAGLE=''):
     scf       = np.array(gas_data['scf'              ])
     h         = np.array(gas_data['h'                ])
     box_size  = np.array(gas_data['boxsize'          ])
+    Hydrogen  = np.array(gas_data['Hydrogen'         ])
+    Oxygen    = np.array(gas_data['Oxygen'           ])
+    # GFM_metal = np.array(gas_data['ElementAbundance' ])
 
     this_sub_pos *= scf # Convert from cMpc to Mpc
     this_sub_pos *= 1.00E+3 # Convert from Mpc to kpc
@@ -223,19 +274,24 @@ def reduce_eagle(snap, galaxy, run, file_ext='', EAGLE=''):
     gas_rho  = gas_rho [rows_without_nan]
     gas_met  = gas_met [rows_without_nan]
     gas_sf   = gas_sf  [rows_without_nan]
+    Hydrogen = Hydrogen[rows_without_nan]
+    Oxygen   = Oxygen  [rows_without_nan]
 
-
-    gas_pos  *= 3.2408e-22 # Convert from cm to kpc
+    gas_pos  *= 3.24e-22 # Convert from cm to kpc
     gas_pos   = center(gas_pos, this_sub_pos)
     gas_vel  *= 1.00E-05 # Convert from cm/s to km/s
     gas_vel  -= this_sub_vel
     gas_mass *= 5.00E-34 # Convert from g to Msun
-    gas_rho  *= xh / mh
-    OH        = gas_met * (zo/xh) * (1.00/16.00)
-    Zgas      = np.log10(OH) + 12
+    gas_rho  *= Hydrogen / mh
+    gas_sfr  *= 5.00E-34 # Convert from g to Msun
+    gas_sfr  /= 3.17E-08 # Convert from s to yr
 
     ri, ro = calc_rsfr_io(gas_pos, gas_sfr)
     ro2    = 2.000E+00 * ro
+    
+    riprime = ri + 0.25 * (ro - ri)
+    
+    this_rsfr50 = calcrsfr(gas_pos, gas_sfr)
     
     sf_idx = gas_sf > 0
     print('SF gas particles in this halo:',sum(sf_idx))
@@ -243,26 +299,47 @@ def reduce_eagle(snap, galaxy, run, file_ext='', EAGLE=''):
     incl    = calc_incl(gas_pos[sf_idx], gas_vel[sf_idx], gas_mass[sf_idx], ri, ro)
     gas_pos = trans(gas_pos, incl)
     
-    gas_rad = np.sqrt(gas_pos[:,0]**2 + gas_pos[:,1]**2 + gas_pos[:,2]**2)
-
-    mask = (Zgas > 0) & (sf_idx)
-
-    gas_rad  = gas_rad  [mask]
-    gas_mass = gas_mass [mask]
-    gas_sfr  = gas_sfr  [mask]
-    gas_rho  = gas_rho  [mask]
-    Zgas     = Zgas     [mask]
-
-    plt.hist2d( gas_rad, Zgas, cmap=plt.cm.Greys, bins=(100,100) )
-
-    plt.xlabel( 'Radius' )
-    plt.ylabel( 'log O/H + 12' )
-
-    plt.savefig( 'diagnostic_figs/' + '%s_profile.pdf' %galaxy )
-
-    print('')
+    GFM_Metal = np.zeros( (len(Hydrogen),len(ALL_EAGLE_SPECIES)) )
+    GFM_Metal[:,2] = Hydrogen
+    GFM_Metal[:,7] = Oxygen
     
-def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 8.0, m_star_max=11.0, m_gas_min=8.0):
+    r, rerr, oh, oherr, _rad_, _oh_ = calczgrad(gas_pos, gas_mass, gas_rho, GFM_Metal, rmax, res,
+                                                O_index = 7, H_index = 2, EAGLE_rho=True, rhocutidx=sf_idx)
+    
+    rsmall, rbig = riprime, ro
+    fit_mask     = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
+    
+    print(rsmall,rbig)
+    print(sum(fit_mask))
+    # try:
+    gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
+    # except:
+    #     gradient_SF = np.nan
+    
+    plt.clf()
+            
+    fig = plt.figure(figsize=(10,6))
+
+    plt.hist2d( _rad_, _oh_, cmap=plt.cm.Greys, bins=(100,100) )
+    plt.plot( r, oh, color='red' )
+
+    plt.axvline( rsmall, color='k', linestyle='--' )
+    plt.axvline( rbig  , color='k', linestyle='--' )
+
+    _x_ = np.arange( 0, np.max(r), 0.1 )
+    _y_ = gradient_SF * _x_ + intercept_SF
+    plt.plot( _x_, _y_, color='blue' )
+
+    plt.xlabel( r'${\rm Radius}~{\rm (kpc)}$' )
+    plt.ylabel( r'$\log {\rm O/H} + 12~{\rm (dex)}$' )
+
+    plt.text( 0.7, 0.9 , r'$z=%s$' %snap2zEAGLE[snap], transform=plt.gca().transAxes )
+    plt.text( 0.7, 0.8 , r'$\log M_* = %s$' %round( this_Mstar,2 ),transform=plt.gca().transAxes )
+
+    plt.tight_layout()
+    plt.savefig( './diagnostic_figs/' + str(galaxy) + '_EAGLE_profile.pdf', bbox_inches='tight' )
+    
+def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_star_max=11.0, m_gas_min=9.0):
     # Note that I am only interested in central galaxies here... can be modified to include satellite
     
     save_dir = '%s_SF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' 
@@ -273,31 +350,33 @@ def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 8.0, m_st
     
     print('Number of star forming galaxies at snap %s: %s' %(snap,len(SF_galaxies['Grnr'])) )
     
-    # Save the group catalog info
-    np.save(save_dir + 'grp_cat' + '.npy', SF_galaxies)
+    ##### Save the group catalog info
+    # np.save(save_dir + 'grp_cat' + '.npy', SF_galaxies)
         
-    subset = SF_galaxies['Grnr']
+    subset = SF_galaxies['Grnr'][:2]
         
-    get_which_files(EAGLE, subset, snap, 
-                    save_loc='./%s_SF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' + 'file_lookup.npy',
-                    file_ext=file_ext)
+    # get_which_files(EAGLE, subset, snap, 
+    #                 save_loc='./%s_SF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' + 'file_lookup.npy',
+    #                 file_ext=file_ext)
     
     # Loop over all galaxies
     ##########################################
     ## To do: all SF galaxies
     ##########################################
-    # for galaxy in subset:
-    #     print('Getting data for central of FoF: %s' %galaxy)
-        # fname = save_dir + '%s_prt_0' %galaxy + '.npy'
+
+    DIR = './%s_SF_galaxies/snap_' %run + str(snap).zfill(3) + '/'
+
+    group_cat = np.load( DIR + 'grp_cat.npy', allow_pickle=True ).item()
+
+    for galaxy in subset:
+        print('Getting data for central of FoF: %s' %galaxy)
         
-        # Save the data
+        # ####### Save the data ####### #
         # gas_data  = read_eagle_subhalo(EAGLE, galaxy, snap, PartType=0, file_ext=file_ext,
         #                                keys=['Coordinates','Mass','Metallicity',
         #                                      'Density','StarFormationRate','Velocity'])
-
-        # np.save(fname, gas_data)
         
-        # reduce_eagle(snap, galaxy, sim_name, file_ext=file_ext, EAGLE=EAGLE)
+        reduce_eagle(snap, galaxy, sim_name, group_cat, file_ext=file_ext, EAGLE=EAGLE)
             
 if __name__ == "__main__":
     snap_to_file_name = {
@@ -314,7 +393,7 @@ if __name__ == "__main__":
         
     run  = 'RefL0100N1504'
     
-    for snap in snap_to_file_name.keys():
+    for snap in [28]:#snap_to_file_name.keys():
         
         if (snap > 11):
             DIR = '/orange/paul.torrey/EAGLE/'
@@ -324,4 +403,4 @@ if __name__ == "__main__":
         EAGLE = DIR + run  + '/' + 'snapshot_%s_%s' %(str(snap).zfill(3),snap_to_file_name[snap]) + '/' 
     
         save_data( snap, EAGLE, run, file_ext=snap_to_file_name[snap], 
-                   m_star_min = 9.0, m_star_max=11.0, m_gas_min=9.0 )
+                   m_star_min=9.0, m_star_max=11.0, m_gas_min=9.0 )
