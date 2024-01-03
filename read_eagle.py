@@ -358,7 +358,7 @@ def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, 
     
     # If `where_to_save` is not None, save to the hdf5 file
     if where_to_save:
-        this_subhalo = where_to_save.create_group('Subhalo_%s' %sub)
+        this_subhalo = where_to_save.create_group('Subhalo_%s' %galaxy)
         
         this_subhalo.create_dataset( 'StarFormingRegion' , data = gradient_SF       )
         this_subhalo.create_dataset( 'ObservationalEquiv', data = gradient_OE       )
