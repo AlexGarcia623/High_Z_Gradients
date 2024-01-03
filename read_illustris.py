@@ -105,7 +105,6 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
     
     sub_redshift = snap2zTNG[snap]
 
-    
     gas_pos   = il.snapshot.loadSubhalo(out_dir, snap, sub, 0, fields = ['Coordinates'      ])
     gas_vel   = il.snapshot.loadSubhalo(out_dir, snap, sub, 0, fields = ['Velocities'       ])
     gas_mass  = il.snapshot.loadSubhalo(out_dir, snap, sub, 0, fields = ['Masses'           ])
@@ -129,17 +128,16 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
     OH = ZO/XH * 1.00/16.00
     
     Zgas = np.log10(OH) + 12
-
+    
     ri, ro = calc_rsfr_io(gas_pos, gas_sfr)
     ro2    = 2.000E+00 * ro
     
     riprime = ri + 0.25 * (ro - ri)
     
     sub_rsfr50 = calcrsfr(gas_pos, gas_sfr)
-
-    # print('Rows without nans: %s' %len(gas_rho))
+    
     sf_idx = gas_rho > 1.300E-01
-    # print('SF gas particles in this halo: %s' %sum(sf_idx))
+
     incl   = calc_incl(gas_pos[sf_idx], gas_vel[sf_idx], gas_mass[sf_idx], ri, ro)
 
     gas_pos  = trans(gas_pos, incl)
@@ -147,21 +145,13 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
 
     r, rerr, oh, oherr, _rad_, _oh_ = calczgrad(gas_pos, gas_mass, gas_rho, GFM_Metal, rmax, res)
     
-    if grad_valid(r, oh):
-        
-        rsmall, rbig = riprime, ro
-        fit_mask     = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
-        try:
-            gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
-        except:
-            gradient_SF = np.nan
-
-        rsmall, rbig = 0.5 * sub_SHM, 2.0 * sub_SHM
-        fit_mask     = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
-        try:
-            gradient_OE, intercept_OE = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
-        except:
-            gradient_OE = np.nan
+    gradient_OE = np.nan
+    gradient_SF = np.nan
+    
+    rsmall, rbig = riprime, ro
+    if grad_valid(r, oh, rsmall, rbig):
+        fit_mask = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
+        gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
         
         if plot:
             plt.clf()
@@ -187,9 +177,11 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
             
             plt.tight_layout()
             plt.savefig( './diagnostic_figs/' + str(sub) + '_TNG_profile.pdf', bbox_inches='tight' )
-    else:
-        gradient_OE = np.nan
-        gradient_SF = np.nan
+        
+    rsmall, rbig = 0.5 * sub_SHM, 2.0 * sub_SHM
+    if grad_valid(r, oh, rsmall, rbig):
+        fit_mask = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
+        gradient_OE, intercept_OE = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
         
     if where_to_save:
         
@@ -219,24 +211,31 @@ if __name__ == "__main__":
 
     run  = 'L35n2160TNG'
     
-    gradients_file = h5py.File( 'TNG_Gradients.hdf5', 'w' )
+    SAVE_DATA = True
     
-    gradients_file.create_dataset( 'run', data=run )
+    try:
+        h5py.File( 'TNG_Gradients.hdf5', 'r+' )
+    except:
+        with h5py.File( 'TNG_Gradients.hdf5', 'w' ) as f:
+            print('file created')
     
     for redshift in z_to_snap_TNG.keys():
 
-        this_group = gradients_file.create_group( 'z=%s' %redshift )
+        with h5py.File( 'TNG_Gradients.hdf5', 'r+' ) as gradients_file:
+            
+            this_group = None
+            if SAVE_DATA:
+                this_group = gradients_file.create_group( 'z=%s' %redshift )
+
+            snap = z_to_snap_TNG[redshift]
+
+            # Used for pointing to correct directory
+            if snap > 25:
+                person = 'zhemler'
+            else:
+                person = 'alexgarcia'
+
+            DIR  = '/orange/paul.torrey/' + person + '/IllustrisTNG/' + run + '/output' + '/'
+
+            save_data(snap, DIR, m_star_min=9.0, m_star_max=11.0, m_gas_min=9.0, where_to_save=this_group)
         
-        snap = z_to_snap_TNG[redshift]
-
-        # Used for pointing to correct directory
-        if snap > 25:
-            person = 'zhemler'
-        else:
-            person = 'alexgarcia'
-
-        DIR  = '/orange/paul.torrey/' + person + '/IllustrisTNG/' + run + '/output' + '/'
-
-        save_data(snap, DIR, m_star_min=9.0, m_star_max=11.0, m_gas_min=9.0, where_to_save=this_group)
-        
-    gradients_file.close()

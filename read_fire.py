@@ -4,6 +4,10 @@ mpl.use('agg')
 import matplotlib.pyplot as plt
 import h5py
 
+from sfms import sfmscut, center, calc_rsfr_io, calc_incl, trans, calczgrad, calcrsfr, grad_valid
+from matplotlib.colors import LogNorm
+from tqdm import tqdm
+
 mpl.rcParams['text.usetex']        = True
 mpl.rcParams['text.latex.unicode'] = True
 mpl.rcParams['font.family']        = 'serif'
@@ -28,6 +32,29 @@ mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
 
+def open_data(location, snap, ptType):
+    
+    with h5py.File( location + 'snapshot_%s' %str(snap).zfill(3) + '.hdf5' ,'r' ) as f:
+        
+        h   = f['Header'].attrs.get('HubbleParam')
+        scf = f['Header'].attrs.get('Time')
+        z   = f['Header'].attrs.get('Redshift')
+                
+        gas_data = f['PartType'+str(ptType)]
+        
+        print(gas_data['Metallicity'])
+
 
 if __name__ == "__main__":
-    print('Hello World!')
+    
+    DIR = '/orange/paul.torrey/FIRE/high_redshift/'
+    
+    sim = 'z5m09a'
+    
+    loc = DIR + sim + '/output/'
+    
+    snap = 20
+    
+    open_data(loc, snap, ptType=0)
+    
+    # print('Hello World!')
