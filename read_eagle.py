@@ -228,7 +228,7 @@ def get_which_files(file_path, group_indeces, snap, nfiles=256,
     all_files = {gal: np.array(files) for gal, files in all_files.items()}
     np.save(save_loc, all_files)
     
-def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, plot=True,
+def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, plot=False,
                  where_to_save=None):
     rmax = 1.00E+02
     
@@ -399,7 +399,7 @@ def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_st
     # Loop over all galaxies (save data if `where_to_save` is not None)
     for galaxy in tqdm(subset):
         reduce_eagle(snap, galaxy, sim_name, group_cat, file_ext=file_ext, EAGLE=EAGLE,
-                     where_to_save=where_to_save)
+                     where_to_save=where_to_save, plot=False)
             
 if __name__ == "__main__":
     # Match the file extension
@@ -436,8 +436,8 @@ if __name__ == "__main__":
     except:
         with h5py.File( 'EAGLE_Gradients.hdf5', 'w' ) as f:
             print('file created')
-    
-    for redshift in z_to_snap_EAGLE.keys():
+                
+    for redshift in np.arange(2,9):#z_to_snap_EAGLE.keys():
         
         snap = z_to_snap_EAGLE[redshift]
         
