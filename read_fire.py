@@ -146,7 +146,13 @@ def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=Fa
         
     # else:
     #     print('Either too small SF region or no SFR (or both)')
-                
+    
+    print('%'*100)
+    print(
+    gradient_SF,gradient_OE,this_mass,this_SFR,this_RSHM,this_rsfr,snap2zFIRE[snap]
+    )
+    print('%'*100)
+    
     if where_to_save:
         
         #### THIS WILL ONLY WORK IF USING `high_redshift` sample
@@ -335,9 +341,9 @@ if __name__ == "__main__":
     }
     
     redshift_to_snap_high_res = {
-         # 5.0:67 ,
-         # 5.5:59 ,
-         # 6.0:52 ,
+         5.0:67 ,
+         5.5:59 ,
+         6.0:52 ,
          6.5:46 ,
          7.0:41 ,
          7.5:37 ,
@@ -349,17 +355,27 @@ if __name__ == "__main__":
     }
     
     all_sims_core = [
-        'm11d_res7100','m11q_res880','m12_elvis_RomulusRemus_res4000','m12m_res7100','m10q_res30', 
-        'm11e_res7100','m12b_res7100','m12_elvis_ThelmaLouise_res4000','m12r_res7100','m10v_res30',
-        'm11h_res7100','m12c_res7100','m12f_res7100','m12w_res7100','m11b_res2100','m11i_res7100',
-        'm12_elvis_RomeoJuliet_res3500','m12i_res7100','m12z_res4200']#,'m09_res30'
+        'm11d_res7100','m11q_res880' ,'m12m_res7100','m11e_res7100',
+        'm12b_res7100','m12r_res7100','m11h_res7100','m12c_res7100',
+        'm12f_res7100','m12w_res7100','m11b_res2100','m11i_res7100',
+        'm12i_res7100','m12z_res4200'
+    ]
+    
+    super_high_res = [
+        'm09_res30','m10q_res30','m10v_res30'
+    ]
+    
+    mergers = [
+        'm12_elvis_RomeoJuliet_res3500','m12_elvis_RomulusRemus_res4000','m12_elvis_ThelmaLouise_res4000'
+    ]
     
     all_sims_high_redshift = [
         'z5m09a','z5m10a','z5m10c','z5m10e','z5m11a','z5m11c','z5m11e','z5m11g','z5m11i','z5m12b','z5m12d',
         'z5m09b','z5m10b','z5m10d','z5m10f','z5m11b','z5m11d','z5m11f','z5m11h','z5m12a','z5m12c','z5m12e'
     ]
     
-    SAVE_DATA = True
+    SAVE_DATA   = True
+    which_suite = 'core'
     
     try:
         h5py.File( 'FIRE_Gradients.hdf5', 'r+' )
@@ -367,27 +383,23 @@ if __name__ == "__main__":
         with h5py.File( 'FIRE_Gradients.hdf5', 'w' ) as f:
             print('file created')
     
-    which_suite = 'high_redshift'
-    
     if which_suite == 'core':
         redshift_to_snap = redshift_to_snap_core
         all_sims         = all_sims_core
     elif which_suite == 'high_redshift':
         redshift_to_snap = redshift_to_snap_high_res
         all_sims         = all_sims_high_redshift
-    
-    which_sim   = all_sims[0]
-    
+        
     for index, redshift in enumerate(redshift_to_snap.keys()):
     
         with h5py.File( 'FIRE_Gradients.hdf5', 'r+' ) as gradients_file:
 
             this_group = None
             if SAVE_DATA:
-                # if (index == 0):
-                #     this_suite = gradients_file.create_group( which_suite )
-                # else:
-                this_suite = gradients_file[ which_suite ]
+                if (index == 0):
+                    this_suite = gradients_file.create_group( which_suite )
+                else:
+                    this_suite = gradients_file[ which_suite ]
                 this_group = this_suite.create_group( 'z=%s' %redshift )
     
             for which_sim in all_sims:
