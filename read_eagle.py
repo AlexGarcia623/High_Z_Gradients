@@ -107,12 +107,13 @@ def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=8.0, m_star
     star_mass = np.array(myData['Stellar_Mass'][:])
     SFR       = np.array(myData['SFR'][:])
     
-    sfms_idx = sfmscut(star_mass, SFR, m_star_min=8.0, m_star_max=10.5, m_gas_min=8.5)
+    sfms_idx = sfmscut(star_mass, SFR, m_star_min=m_star_min,
+                       m_star_max=m_star_max, m_gas_min=m_gas_min)
     
     SFG_mask = ((star_mass > 1.00E+01**(m_star_min)) &
                 (star_mass < 1.00E+01**(m_star_max)) &
                 (gas_mass  > 1.00E+01**(m_gas_min))  &
-                (sfms_idx))
+                ~(sfms_idx))
     
     # Save only star forming galaxies within our mass range
     for key in keys:
@@ -367,6 +368,11 @@ def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, 
         this_subhalo.create_dataset( 'StellarHalfMassRad', data = this_RSHM         )
         this_subhalo.create_dataset( 'SFRHalfMassRad'    , data = this_rsfr50       )
         this_subhalo.create_dataset( 'Redshift'          , data = snap2zEAGLE[snap] )
+        this_subhalo.create_dataset( 'Profile_radius'    , data = r                )
+        this_subhalo.create_dataset( 'Profile_oh'        , data = oh               )
+        this_subhalo.create_dataset( 'Radius_in'         , data = ri               )
+        this_subhalo.create_dataset( 'Radius_inprime'    , data = riprime          )
+        this_subhalo.create_dataset( 'Radius_out'        , data = ro               )
     
 def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_star_max=11.0, m_gas_min=9.0,
               where_to_save=None):
@@ -382,8 +388,7 @@ def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_st
     
     ##### Save the group catalog info
     np.save(save_dir + 'grp_cat' + '.npy', SF_galaxies)
-        
-        
+    
     # Used for debugging, add/remove array slicing as you see fit
     subset = SF_galaxies['Grnr']
     
@@ -429,7 +434,7 @@ if __name__ == "__main__":
         
     run  = 'RefL0100N1504'
     
-    SAVE_DATA = True
+    SAVE_DATA = False
     
     try:
         h5py.File( 'EAGLE_Gradients.hdf5', 'r+' )
@@ -437,7 +442,7 @@ if __name__ == "__main__":
         with h5py.File( 'EAGLE_Gradients.hdf5', 'w' ) as f:
             print('file created')
                 
-    for redshift in np.arange(2,9):#z_to_snap_EAGLE.keys():
+    for redshift in [0]:#np.arange(0,9):#z_to_snap_EAGLE.keys():
         
         snap = z_to_snap_EAGLE[redshift]
         

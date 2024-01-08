@@ -4,7 +4,7 @@ import numpy as np
 def line(data, a, b):
     return a*data + b
 
-def sfmscut(m0, sfr0, threshold=-5.00E-01, m_star_min=8.0, m_star_max=10.5, m_gas_min=8.5):
+def sfmscut(m0, sfr0, threshold=-5.00E-01, m_star_min=8.0, m_star_max=11.5, m_gas_min=8.5):
     nsubs = len(m0)
     idx0  = np.arange(0, nsubs)
     non0  = ((m0   > 0.000E+00) & 
@@ -19,12 +19,15 @@ def sfmscut(m0, sfr0, threshold=-5.00E-01, m_star_min=8.0, m_star_max=10.5, m_ga
     idxbs   = np.ones(len(m), dtype = int) * -1
     cnt     = 0
     mbrk    = 1.0200E+01
-    mstp    = 2.0000E-01
+    #### Added for RefL0100N1504 -- m_star_min = 10.0
+    if (m_star_min > 9.5):
+        mstp = 1.0000E-01
+    else:
+        mstp = 2.0000E-01
     mmin    = m_star_min
     mbins   = np.arange(mmin, mbrk + mstp, mstp)
     rdgs    = []
     rdgstds = []
-
 
     for i in range(0, len(mbins) - 1):
         idx   = (m > mbins[i]) & (m < mbins[i+1])

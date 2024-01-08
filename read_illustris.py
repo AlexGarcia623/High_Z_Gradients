@@ -55,7 +55,7 @@ mpl.rcParams['ytick.minor.size']  = 3.5
 mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
-def save_data(snap, out_dir, m_star_min=9.0, m_star_max=np.inf, m_gas_min=9.0, res=2160,
+def save_data(snap, out_dir, m_star_min=9.0, m_star_max=11.0, m_gas_min=9.0, res=2160,
               where_to_save=None):
     
     hdr  = il.groupcat.loadHeader(out_dir, snap)
@@ -72,7 +72,9 @@ def save_data(snap, out_dir, m_star_min=9.0, m_star_max=np.inf, m_gas_min=9.0, r
     sub_cat['SubhaloMass']     *= 1.000E+10 / h
     sub_cat['SubhaloMassType'] *= 1.000E+10 / h
     
-    sfms_idx = sfmscut(sub_cat['SubhaloMassType'][subs,4], sub_cat['SubhaloSFR'][subs])
+    sfms_idx = sfmscut(sub_cat['SubhaloMassType'][subs,4], sub_cat['SubhaloSFR'][subs],
+                       m_star_min=m_star_min,m_star_max=m_star_max, m_gas_min=m_gas_min)
+    
     subs     = subs[(sub_cat['SubhaloMassType'][subs,4] > 1.000E+01**m_star_min) & 
                     (sub_cat['SubhaloMassType'][subs,4] < 1.000E+01**m_star_max) &
                     (sub_cat['SubhaloMassType'][subs,0] > 1.000E+01**m_gas_min) &
@@ -194,6 +196,11 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
         this_subhalo.create_dataset( 'StellarHalfMassRad', data = sub_SHM          )
         this_subhalo.create_dataset( 'SFRHalfMassRad'    , data = sub_rsfr50       )
         this_subhalo.create_dataset( 'Redshift'          , data = snap2zTNG[snap]  )
+        this_subhalo.create_dataset( 'Profile_radius'    , data = r                )
+        this_subhalo.create_dataset( 'Profile_oh'        , data = oh               )
+        this_subhalo.create_dataset( 'Radius_in'         , data = ri               )
+        this_subhalo.create_dataset( 'Radius_inprime'    , data = riprime          )
+        this_subhalo.create_dataset( 'Radius_out'        , data = ro               )
     
 if __name__ == "__main__":
     
@@ -229,7 +236,7 @@ if __name__ == "__main__":
 
             snap = z_to_snap_TNG[redshift]
 
-            # Used for pointing to correct directory
+            # Used for pointing to correct directory with TNG50-1
             if snap > 25:
                 person = 'zhemler'
             else:

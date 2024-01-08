@@ -374,7 +374,7 @@ if __name__ == "__main__":
         'z5m09b','z5m10b','z5m10d','z5m10f','z5m11b','z5m11d','z5m11f','z5m11h','z5m12a','z5m12c','z5m12e'
     ]
     
-    SAVE_DATA   = True
+    SAVE_DATA   = False
     which_suite = 'core'
     
     try:

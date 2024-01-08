@@ -1,21 +1,21 @@
 #!/bin/bash
-#SBATCH --job-name=FIRE                 # Job name
+#SBATCH --job-name=TNG                # Job name
 #SBATCH --mail-type=END,FAIL            # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=alexgarcia@ufl.edu  # Where to send mail	
 #SBATCH --ntasks=1                      # Run on a single CPU
-#SBATCH --mem=64gb                      # Job memory request
+#SBATCH --mem=32gb                      # Job memory request
 #SBATCH --time=36:00:00                 # Time limit hrs:min:sec
-#SBATCH --output=FIRE_core_%j.log       # Standard output and error log
+#SBATCH --output=TNG_%j.log           # Standard output and error log
 pwd; hostname; date
 
 module purge
 module load conda
 
-# conda activate myenv
-# python read_eagle.py
+conda activate myenv
+python read_eagle.py
 # python read_illustris.py
 
-conda activate py3 
-python read_fire.py
+# conda activate py3 
+# python read_fire.py # May want to consider requesting 64GB when doing `core` sample
 
 date
