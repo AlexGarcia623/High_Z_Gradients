@@ -51,29 +51,44 @@ def sfmscut(m0, sfr0, threshold=-5.00E-01, m_star_min=8.0, m_star_max=11.5, m_ga
     nonans = (~(np.isnan(mcs)) &
               ~(np.isnan(rdgs)) &
               ~(np.isnan(rdgs)))
-        
-    parms, cov = curve_fit(line, mcs[nonans], rdgs[nonans], sigma = rdgstds[nonans])
-    mmin    = mbrk
-    mmax    = m_star_max
-    mbins   = np.arange(mmin, mmax + mstp, mstp)
-    mcs     = mbins[:-1] + mstp / 2.000E+00
-    ssfrlin = line(mcs, parms[0], parms[1])
-        
-    for i in range(0, len(mbins) - 1):
-        idx   = (m > mbins[i]) & (m < mbins[i+1])
-        idx0b = idx0[idx]
-        mb    =    m[idx]
-        ssfrb = ssfr[idx]
-        sfrb  =  sfr[idx]
-        idxb  = (ssfrb - ssfrlin[i]) > threshold
-        lenb  = np.sum(idxb)
-        idxbs[cnt:(cnt+lenb)] = idx0b[idxb]
-        cnt += lenb
-    idxbs    = idxbs[idxbs > 0]
-    sfmsbool = np.zeros(len(m0), dtype = int)
-    sfmsbool[idxbs] = 1
-    sfmsbool = (sfmsbool == 1)
-    return sfmsbool
+       
+    # if everything is a nan, will only happen if there are no galaxies in the mass range
+    if sum(nonans) == 0:
+        return np.zeros(len(m0), dtype = int) == 1 # return array of all False
+    # if only one non-nan value, will only happen if all galaxies are in one mass bin
+    elif sum(nonans) == 1:
+        sfmsbool = np.zeros(len(m0), dtype = int)
+        thismask = (m > m_star_min) & (m < m_star_max)
+        args     = np.where(thismask == 1)[0]
+        # All galaxies within this mass bin that have SFR > 0 are "SF galaxies"
+        for arg in args:
+            if sfr[arg] > 0:
+                sfmsbool[arg] = 1
+        return sfmsbool == 1
+    # normal behavior, create sSFMS
+    else:
+        parms, cov = curve_fit(line, mcs[nonans], rdgs[nonans], sigma = rdgstds[nonans])
+        mmin    = mbrk
+        mmax    = m_star_max
+        mbins   = np.arange(mmin, mmax + mstp, mstp)
+        mcs     = mbins[:-1] + mstp / 2.000E+00
+        ssfrlin = line(mcs, parms[0], parms[1])
+
+        for i in range(0, len(mbins) - 1):
+            idx   = (m > mbins[i]) & (m < mbins[i+1])
+            idx0b = idx0[idx]
+            mb    =    m[idx]
+            ssfrb = ssfr[idx]
+            sfrb  =  sfr[idx]
+            idxb  = (ssfrb - ssfrlin[i]) > threshold
+            lenb  = np.sum(idxb)
+            idxbs[cnt:(cnt+lenb)] = idx0b[idxb]
+            cnt += lenb
+        idxbs    = idxbs[idxbs > 0]
+        sfmsbool = np.zeros(len(m0), dtype = int)
+        sfmsbool[idxbs] = 1
+        sfmsbool = (sfmsbool == 1)
+        return sfmsbool
 
 def trans(arr0, incl0):
     arr      = np.copy( arr0)

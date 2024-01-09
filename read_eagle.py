@@ -61,7 +61,7 @@ mpl.rcParams['ytick.minor.size']  = 3.5
 mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
-def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=8.0, m_star_max=10.5, m_gas_min=8.5,
+def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=10.0, m_star_max=11.0, m_gas_min=10.0,
                     verbose=False):
     # Create Query of EAGLE database
     myQuery = '''SELECT \
@@ -113,7 +113,7 @@ def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=8.0, m_star
     SFG_mask = ((star_mass > 1.00E+01**(m_star_min)) &
                 (star_mass < 1.00E+01**(m_star_max)) &
                 (gas_mass  > 1.00E+01**(m_gas_min))  &
-                ~(sfms_idx))
+                (sfms_idx))
     
     # Save only star forming galaxies within our mass range
     for key in keys:
@@ -442,7 +442,7 @@ if __name__ == "__main__":
         with h5py.File( 'EAGLE_Gradients.hdf5', 'w' ) as f:
             print('file created')
                 
-    for redshift in [0]:#np.arange(0,9):#z_to_snap_EAGLE.keys():
+    for redshift in [7,8]:#np.arange(0,9):#z_to_snap_EAGLE.keys():
         
         snap = z_to_snap_EAGLE[redshift]
         
