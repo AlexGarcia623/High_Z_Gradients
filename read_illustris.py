@@ -33,7 +33,7 @@ snap2zTNG = {
 }
 
 mpl.rcParams['text.usetex']        = True
-mpl.rcParams['text.latex.unicode'] = True
+# mpl.rcParams['text.latex.unicode'] = True
 mpl.rcParams['font.family']        = 'serif'
 mpl.rcParams['font.size']          = 20
 
@@ -144,7 +144,7 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
 
     gas_pos  = trans(gas_pos, incl)
     gas_vel  = trans(gas_vel, incl)
-
+    
     r, rerr, oh, oherr, _rad_, _oh_ = calczgrad(gas_pos, gas_mass, gas_rho, GFM_Metal, rmax, res)
     
     gradient_OE = np.nan
@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
     run  = 'L35n2160TNG'
     
-    SAVE_DATA = True
+    SAVE_DATA = False
     
     try:
         h5py.File( 'TNG_Gradients.hdf5', 'r+' )

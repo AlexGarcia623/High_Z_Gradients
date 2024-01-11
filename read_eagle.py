@@ -40,7 +40,7 @@ snap2zEAGLE = {
 ALL_EAGLE_SPECIES = ["Carbon", "Helium", "Hydrogen", "Iron", "Magnesium", "Neon", "Nitrogen", "Oxygen", "Silicon"]
 
 mpl.rcParams['text.usetex']        = True
-mpl.rcParams['text.latex.unicode'] = True
+# mpl.rcParams['text.latex.unicode'] = True
 mpl.rcParams['font.family']        = 'serif'
 mpl.rcParams['font.size']          = 20
 
@@ -86,8 +86,8 @@ def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=10.0, m_sta
         SnapNum = %s \
         and SH.SubGroupNumber = 0 
         and SH.StarFormationRate > 0.0\
-        and SH.MassType_Star > 1E8\
-        and SH.SubGroupNumber = 0''' %(simulation_run, snap) 
+        and SH.MassType_Star > 9E9\
+        and SH.SubGroupNumber = 0''' %(simulation_run, snap)  # Change SH.MassType_Star as needed!
 
     if verbose:
         print('Starting Query... snapshot %s' %snap)
@@ -113,7 +113,7 @@ def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=10.0, m_sta
     SFG_mask = ((star_mass > 1.00E+01**(m_star_min)) &
                 (star_mass < 1.00E+01**(m_star_max)) &
                 (gas_mass  > 1.00E+01**(m_gas_min))  &
-                (sfms_idx))
+                ~(sfms_idx))
     
     # Save only star forming galaxies within our mass range
     for key in keys:
@@ -378,13 +378,13 @@ def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_st
               where_to_save=None):
     # Note that I am only interested in central galaxies here... can be modified to include satellite
     
-    save_dir = '%s_SF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' 
+    save_dir = '%s_nSF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' 
     
     # Get SF galaxies at this snapshot
     SF_galaxies = get_SF_galaxies(snap, simulation_run=sim_name, m_star_min=m_star_min,
                                   m_star_max=m_star_max, m_gas_min=m_gas_min,verbose=True)
     
-    print('Number of star forming galaxies at snap %s: %s' %(snap,len(SF_galaxies['Grnr'])) )
+    print('Number of non star forming galaxies at snap %s: %s' %(snap,len(SF_galaxies['Grnr'])) )
     
     ##### Save the group catalog info
     np.save(save_dir + 'grp_cat' + '.npy', SF_galaxies)
@@ -392,14 +392,12 @@ def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_st
     # Used for debugging, add/remove array slicing as you see fit
     subset = SF_galaxies['Grnr']
     
-    ####### Remove comment tags to generate "offset files"
+    ####### Generate "offset files"
     get_which_files(EAGLE, subset, snap, 
-                    save_loc='./%s_SF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' + 'file_lookup.npy',
+                    save_loc=save_dir + 'file_lookup.npy',
                     file_ext=file_ext)
     
-    DIR = './%s_SF_galaxies/snap_' %run + str(snap).zfill(3) + '/'
-
-    group_cat = np.load( DIR + 'grp_cat.npy', allow_pickle=True ).item()
+    group_cat = np.load( save_dir + 'grp_cat.npy', allow_pickle=True ).item()
     
     # Loop over all galaxies (save data if `where_to_save` is not None)
     for galaxy in tqdm(subset):
@@ -434,19 +432,20 @@ if __name__ == "__main__":
         
     run  = 'RefL0100N1504'
     
-    SAVE_DATA = False
+    SAVE_DATA = True
+    file_name = 'EAGLE_Gradients_NSF.hdf5'
     
     try:
-        h5py.File( 'EAGLE_Gradients.hdf5', 'r+' )
+        h5py.File( file_name, 'r+' )
     except:
-        with h5py.File( 'EAGLE_Gradients.hdf5', 'w' ) as f:
+        with h5py.File( file_name, 'w' ) as f:
             print('file created')
                 
-    for redshift in [7,8]:#np.arange(0,9):#z_to_snap_EAGLE.keys():
+    for redshift in [0,1,2]:#np.arange(0,9):#z_to_snap_EAGLE.keys():
         
         snap = z_to_snap_EAGLE[redshift]
         
-        with h5py.File( 'EAGLE_Gradients.hdf5', 'r+' ) as gradients_file:
+        with h5py.File( file_name, 'r+' ) as gradients_file:
             
             this_group = None
             if SAVE_DATA:
