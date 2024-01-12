@@ -213,14 +213,13 @@ def tng(snap, ID, ax_map, ax_map2, ax_prof, fig):
     ax_prof.set_xlabel( r'${\rm Radius~(kpc)}$' )
     ax_prof.set_ylabel( r'$\log{\rm O/H} + 12~({\rm dex})$' )
     
-    ax_prof.text( 0.85, 0.9  , r'${\rm TNG}$', transform=ax_prof.transAxes, ha='left', fontsize=fs_small )
-    ax_prof.text( 0.95, 0.825, r'$z=5$'      , transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.95, 0.75 , r'$\log(M_*/M_\odot) = %s~$' %round(np.log10(this_stellar_mass),2),
+    ax_prof.text( 0.975, 0.9   , r'${\rm TNG}~z=5$', transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
+    ax_prof.text( 0.975, 0.825 , r'$\log(M_*/M_\odot) = %s~$' %round(np.log10(this_stellar_mass),2),
                  transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.95, 0.675, r'$\nabla = %s ~(dex/kpc)$' %round(gradient_SF,2), transform=ax_prof.transAxes,
+    ax_prof.text( 0.975, 0.75, r'$\nabla = %s\,({\rm dex/kpc})$' %round(gradient_SF,2), transform=ax_prof.transAxes,
                  ha='right', fontsize=fs_small )
     
-    ax_prof.set_xticks([7,8,9])
+    ax_prof.set_yticks([7,8,9])
     
     plot_circle( ax_map, riprime )
     plot_circle( ax_map, ro )
@@ -349,11 +348,10 @@ def eagle(snap, galaxy, group_cat,ax_map, ax_map2, ax_prof, fig, file_ext):
     
     ax_prof.set_xlabel( r'${\rm Radius~(kpc)}$' )
     
-    ax_prof.text( 0.775, 0.9, r'${\rm EAGLE}$', transform=ax_prof.transAxes, ha='left', fontsize=fs_small )
-    ax_prof.text( 0.95 , 0.825, r'$z=5$'        , transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.95 , 0.75 , r'$\log(M_*/M_\odot) = %s~$' %round(this_Mstar,2),
+    ax_prof.text( 0.975 , 0.9  , r'${\rm EAGLE}~z=5$', transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
+    ax_prof.text( 0.975 , 0.825, r'$\log(M_*/M_\odot) = %s~$' %round(this_Mstar,2),
                  transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.95 , 0.675, r'$\nabla = %s ~(dex/kpc)$' %round(gradient_SF,2), transform=ax_prof.transAxes,
+    ax_prof.text( 0.975 , 0.75 , r'$\nabla = %s\,({\rm dex/kpc})$' %round(gradient_SF,2), transform=ax_prof.transAxes,
                  ha='right', fontsize=fs_small )
     
     ax_prof.set_yticks([7,8,9])
@@ -424,11 +422,10 @@ def fire(location, redshift, snap, ptType, tag, ax_map, ax_map2, ax_prof, fig):
     
     ax_prof.set_xlabel( r'${\rm Radius~(kpc)}$' )
     
-    ax_prof.text( 0.825, 0.9  , r'${\rm FIRE}$', transform=ax_prof.transAxes, ha='left', fontsize=fs_small )
-    ax_prof.text( 0.95 , 0.825, r'$z=5$'       , transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.95 , 0.75 , r'$\log(M_*/M_\odot) = %s~$' %round(this_mass,2),
+    ax_prof.text( 0.975, 0.9  , r'${\rm FIRE}~z=5$', transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
+    ax_prof.text( 0.975, 0.825, r'$\log(M_*/M_\odot) = %s~$' %round(this_mass,2),
                  transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.95 , 0.675, r'$\nabla = %s ~(dex/kpc)$' %round(gradient_SF,2), transform=ax_prof.transAxes,
+    ax_prof.text( 0.975, 0.75 , r'$\nabla = %s\,({\rm dex/kpc})$' %round(gradient_SF,2), transform=ax_prof.transAxes,
                  ha='right', fontsize=fs_small )
     
     ax_prof.set_yticks([8,9])
@@ -827,7 +824,7 @@ def plot_circle( ax, r, color='white', lw=2.0 ):
     x = r * np.cos(theta)
     y = r * np.sin(theta)
     
-    ax.plot( x, y, color=color, lw=lw, alpha=0.75 )
+    ax.plot( x, y, color=color, lw=lw, alpha=0.5 )
 
 if __name__ == "__main__":
     
@@ -852,6 +849,7 @@ if __name__ == "__main__":
     
     print('TNG')
     tng(z_to_snap_TNG[int(redshift)], TNG_galaxy_ID, axs[1,0], axs[1,1], axbig_TNG, fig)
+    axbig_TNG.yaxis.set_minor_locator(mpl.ticker.AutoMinorLocator(6))
     ############
     
     #### EAGLE ####
@@ -868,6 +866,7 @@ if __name__ == "__main__":
     print('EAGLE')
     eagle( z_to_snap_EAGLE[redshift],EAGLE_galaxy_ID, eagle_grp_cat,
            axs[1,2], axs[1,3], axbig_EAGLE, fig, file_ext=snap_to_file_name[ z_to_snap_EAGLE[redshift] ] )
+    axbig_EAGLE.yaxis.set_minor_locator(mpl.ticker.AutoMinorLocator(6))
     ############
     
     #### FIRE ####
@@ -885,6 +884,7 @@ if __name__ == "__main__":
     print('FIRE')
     fire(loc, redshift, z_to_snap_high_redshift[redshift], ptType=0, tag=which_sim,
          ax_map=axs[1,4], ax_map2=axs[1,5], ax_prof=axbig_FIRE, fig=fig)
+    axbig_FIRE.yaxis.set_minor_locator(mpl.ticker.AutoMinorLocator(6))
     ############
     
     axs[0,0].text( 0.5,0.4, r'$\Sigma_{\rm gas}~(M_\odot/{\rm kpc}^2)$', transform=axs[0,0].transAxes, ha='center',
@@ -913,32 +913,32 @@ if __name__ == "__main__":
         
     plt.tight_layout()
     
-    axs[1,0].text( 0.725, 0.9  , r'${\rm TNG}$'  , transform=axs[1,0].transAxes,
-                  color='white', ha='left', fontsize=fs_small )
-    axs[1,0].text( 0.975, 0.015, r'${\rm Gas~Mass}$', transform=axs[1,0].transAxes,
-                  color='white', fontsize=fs_small, ha='right' )
-    axs[1,1].text( 0.725, 0.9  , r'${\rm TNG}$'  , transform=axs[1,1].transAxes,
-                  color='white', ha='left', fontsize=fs_small )
-    axs[1,1].text( 0.975, 0.015, r'${\rm Metallicity}$', transform=axs[1,1].transAxes,
-                  color='white', fontsize=fs_small, ha='right' )
+    axs[1,0].text( 0.7  , 0.875, r'${\rm TNG}$'  , transform=axs[1,0].transAxes,
+                  color='white', ha='left', fontsize=fs_small+2 )
+    axs[1,0].text( 0.975, 0.02 , r'${\rm Gas~Mass}$', transform=axs[1,0].transAxes,
+                  color='white', fontsize=fs_small+2, ha='right' )
+    axs[1,1].text( 0.7  , 0.875 , r'${\rm TNG}$'  , transform=axs[1,1].transAxes,
+                  color='white', ha='left', fontsize=fs_small+2 )
+    axs[1,1].text( 0.975, 0.02 , r'${\rm Metallicity}$', transform=axs[1,1].transAxes,
+                  color='white', fontsize=fs_small+2, ha='right' )
     
-    axs[1,2].text( 0.575, 0.9  , r'${\rm EAGLE}$', transform=axs[1,2].transAxes,
-                  color='white', ha='left', fontsize=fs_small )
-    axs[1,2].text( 0.975, 0.015, r'${\rm Gas~Mass}$', transform=axs[1,2].transAxes,
-                  color='white', fontsize=fs_small, ha='right' )
-    axs[1,3].text( 0.575, 0.9  , r'${\rm EAGLE}$', transform=axs[1,3].transAxes,
-                  color='white', ha='left', fontsize=fs_small )
-    axs[1,3].text( 0.975, 0.015, r'${\rm Metallicity}$', transform=axs[1,3].transAxes,
-                  color='white', fontsize=fs_small, ha='right' )
+    axs[1,2].text( 0.525, 0.875, r'${\rm EAGLE}$', transform=axs[1,2].transAxes,
+                  color='white', ha='left', fontsize=fs_small+2 )
+    axs[1,2].text( 0.975, 0.02 , r'${\rm Gas~Mass}$', transform=axs[1,2].transAxes,
+                  color='white', fontsize=fs_small+2, ha='right' )
+    axs[1,3].text( 0.525, 0.875, r'${\rm EAGLE}$', transform=axs[1,3].transAxes,
+                  color='white', ha='left', fontsize=fs_small+2 )
+    axs[1,3].text( 0.975, 0.02 , r'${\rm Metallicity}$', transform=axs[1,3].transAxes,
+                  color='white', fontsize=fs_small+2, ha='right' )
     
-    axs[1,4].text( 0.700, 0.9  , r'${\rm FIRE}$' , transform=axs[1,4].transAxes,
-                  color='white', ha='left', fontsize=fs_small )
-    axs[1,4].text( 0.975, 0.015, r'${\rm Gas~Mass}$', transform=axs[1,4].transAxes,
-                  color='white', fontsize=fs_small, ha='right' )
-    axs[1,5].text( 0.700, 0.9  , r'${\rm FIRE}$' , transform=axs[1,5].transAxes,
-                  color='white', ha='left', fontsize=fs_small )
-    axs[1,5].text( 0.975, 0.015, r'${\rm Metallicity}$' , transform=axs[1,5].transAxes,
-                  color='white', fontsize=fs_small, ha='right' )
+    axs[1,4].text( 0.65 , 0.875, r'${\rm FIRE}$' , transform=axs[1,4].transAxes,
+                  color='white', ha='left', fontsize=fs_small+2 )
+    axs[1,4].text( 0.975, 0.02 , r'${\rm Gas~Mass}$', transform=axs[1,4].transAxes,
+                  color='white', fontsize=fs_small+2, ha='right' )
+    axs[1,5].text( 0.65 , 0.875, r'${\rm FIRE}$' , transform=axs[1,5].transAxes,
+                  color='white', ha='left', fontsize=fs_small+2 )
+    axs[1,5].text( 0.975, 0.02 , r'${\rm Metallicity}$' , transform=axs[1,5].transAxes,
+                  color='white', fontsize=fs_small+2, ha='right' )
     
     plt.subplots_adjust( wspace=0.2, hspace=-0.2 )
     plt.savefig( './figures/' + 'all_maps.pdf',bbox_inches='tight' )
