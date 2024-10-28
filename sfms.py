@@ -197,24 +197,14 @@ def calcrsfr(pos0, sfr0, frac = 5.000E-01, ndim = 3):
     rsfr   = rpos[idx]
     return rsfr
 
-def calczgrad(pos, m, hrho, zm9, rmax, res, O_index=4, H_index=0, EAGLE_rho=False, rhocutidx=None):
+def calczgrad(pos, m, hrho, zm9, rmax, res, O_index=4, H_index=0, EAGLE_rho=False,
+              rhocutidx=None, no_SF_cut=False):
     # Search area. First 0.05 kpc, then 0.125, 0.25, 0.5, and finally 1.0 kpc
     bpass  = [5.000E-02, 1.250E-01, 2.500E-01, 5.000E-01, 1.000E+00]
     
-    # Different resolutions need difference pixel sizes
-    if (res == 2160): # TNG50-1 equiv.
-        pixl   =  1.000E-01
-        nmin   =  16 #min particles needed to be observationally equivalent
-    elif (res == 1080): # TNG50-2 equiv.
-        pixl   =  2.500E-01
-        nmin   =  8
-    elif (res == 540): # TNG50-3 equiv.
-        pixl   =  5.000E-01
-        nmin   =  4
-    elif (res == 270): # TNG50-4 equiv.
-        pixl   =  1.000E+00
-        nmin   =  2
-        
+    pixl   =  1.000E-01
+    nmin   =  16 #min pixels required
+    
     dr     =  1.00E-01 #kpc
     pixa   =  pixl**2.000E+00
     sigcut =  1.000E+00
@@ -242,6 +232,13 @@ def calczgrad(pos, m, hrho, zm9, rmax, res, O_index=4, H_index=0, EAGLE_rho=Fals
     xyo, x, y = np.histogram2d(pos[rhoidx,0], pos[rhoidx,1], weights = np.multiply(m[rhoidx], zm9[rhoidx,O_index]), bins = [pixlims, pixlims])
     # Hydrogen map
     xyh, x, y = np.histogram2d(pos[rhoidx,0], pos[rhoidx,1], weights = np.multiply(m[rhoidx], zm9[rhoidx,H_index]), bins = [pixlims, pixlims])
+    if no_SF_cut:
+        # Oxygen map
+        xyo, x, y = np.histogram2d(pos[:,0], pos[:,1], weights = np.multiply(m, zm9[:,O_index]),
+                                   bins = [pixlims, pixlims])
+        # Hydrogen map
+        xyh, x, y = np.histogram2d(pos[:,0], pos[:,1], weights = np.multiply(m, zm9[:,H_index]),
+                                   bins = [pixlims, pixlims])
     xym       = np.transpose(xym)
     xyo       = np.transpose(xyo)
     xyh       = np.transpose(xyh)
@@ -259,7 +256,9 @@ def calczgrad(pos, m, hrho, zm9, rmax, res, O_index=4, H_index=0, EAGLE_rho=Fals
     rsortidx = np.argsort(rs)
     rs       =   rs[rsortidx]
     xyoh     = xyoh[rsortidx]
-    
+   
+    if len(rs) == 0:
+        return [np.nan], np.nan, np.nan, np.nan, np.nan, np.nan 
     robs   = np.arange(0.000E+00, rs[-1], dr)
     lgrad  = len(robs)
     stdrs  = np.zeros(lgrad,         dtype = float)
@@ -283,20 +282,9 @@ def calczgrad(pos, m, hrho, zm9, rmax, res, O_index=4, H_index=0, EAGLE_rho=Fals
 def calc_sfr_prof(pos, m, hrho, sfr, rmax, res, EAGLE_rho=False, rhocutidx=None):
     # Search area. First 0.05 kpc, then 0.125, 0.25, 0.5, and finally 1.0 kpc
     bpass  = [5.000E-02, 1.250E-01, 2.500E-01, 5.000E-01, 1.000E+00]
-    
-    # Different resolutions need difference pixel sizes
-    if (res == 2160): # TNG50-1 equiv.
-        pixl   =  1.000E-01
-        nmin   =  16 #min particles needed to be observationally equivalent
-    elif (res == 1080): # TNG50-2 equiv.
-        pixl   =  2.500E-01
-        nmin   =  8
-    elif (res == 540): # TNG50-3 equiv.
-        pixl   =  5.000E-01
-        nmin   =  4
-    elif (res == 270): # TNG50-4 equiv.
-        pixl   =  1.000E+00
-        nmin   =  2
+
+    pixl   =  1.000E-01
+    nmin   =  16 #min particles needed to be observationally equivalent
         
     dr     =  1.00E-01 #kpc
     pixa   =  pixl**2.000E+00

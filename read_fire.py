@@ -63,11 +63,12 @@ snap2zFIRE = {
 }
 
 
-def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=False):
+def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=True):
     
     # Load in group catalogs
     grp_cat = halo.io.IO.read_catalogs( 'redshift', redshift, location, species='star' )
     
+    ### Get all halos with total SM > 0, then get 1st most massive
     high_res_selection = np.where(grp_cat['star.mass'] > 0)[0]
     
     positions = grp_cat['star.position'] [high_res_selection]
@@ -77,6 +78,7 @@ def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=Fa
     
     arg_most_massive = np.argmax(grp_cat['mass'][high_res_selection])
     
+    ### Interested in most massive subhalo
     this_mass     = np.log10(masses[arg_most_massive])
     this_position = positions[arg_most_massive]
     this_id       = ids      [arg_most_massive]
@@ -94,19 +96,17 @@ def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=Fa
     
     part = gizmo.io.Read.read_snapshots('gas', 'redshift', redshift, location)
     
-    r, rerr, oh, oherr, _rad_,_oh_, ri, ro, riprime = calczgrad_FIRE(part)
+    r, rerr, oh, oherr, _rad_,_oh_, ri, ro, riprime, sf_r, sf_Z = calczgrad_FIRE(part)
     
     gradient_SF = np.nan
     gradient_OE = np.nan
     this_rsfr   = np.nan
     this_SFR    = np.nan
     
-    if len(r) > 0:    
-        rsmall, rbig = riprime, ro
-        fit_mask = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
-        if sum(fit_mask) > 0:
-            gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
-
+    intercept_SF = np.nan
+    intercept_OE = np.nan
+    
+    if len(r) > 0:
         gas_pos  = part['gas'].prop('host.distance')
         gas_sfr  = part['gas'].prop('sfr')
     
@@ -115,6 +115,11 @@ def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=Fa
         
         this_rsfr = calcrsfr(gas_pos, gas_sfr)
         
+        rsmall, rbig = 0, this_rsfr#riprime, ro
+        fit_mask = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
+        if sum(fit_mask) > 0:
+            gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
+        
         if plot:
             plt.clf()
 
@@ -122,7 +127,12 @@ def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=Fa
 
             plt.hist2d( _rad_, _oh_, cmap=plt.cm.Greys, bins=(100,100) )
             plt.plot( r, oh, color='red' )
-
+            
+            plt.scatter(sf_r, sf_Z, color='green')
+            gradient_sf, intercept_sf = np.polyfit( sf_r[( sf_r > rsmall ) & ( sf_r < rbig )], 
+                                                    sf_Z[( sf_r > rsmall ) & ( sf_r < rbig )],
+                                                    1 )
+            
             plt.axvline( rsmall, color='k', linestyle='--' )
             plt.axvline( rbig  , color='k', linestyle='--' )
 
@@ -130,12 +140,18 @@ def open_data(location, redshift, snap, ptType, tag, where_to_save=None, plot=Fa
             _y_ = gradient_SF * _x_ + intercept_SF
             plt.plot( _x_, _y_, color='blue' )
 
+            _x_ = np.arange( 0, np.max(r), 0.1 )
+            _y_ = gradient_sf * _x_ + intercept_sf
+            plt.plot( _x_, _y_, color='blue' )
+            
             plt.xlabel( r'${\rm Radius}~{\rm (kpc)}$' )
             plt.ylabel( r'$\log {\rm O/H} + 12~{\rm (dex)}$' )
 
             plt.text( 0.7, 0.9 , r'$z=%s$' %snap2zFIRE[snap], transform=plt.gca().transAxes )
-            plt.text( 0.7, 0.8 , r'$\log M_* = %s$' %round( this_mass,2 ),transform=plt.gca().transAxes )
-
+            plt.text( 0.7, 0.8 , r'$\nabla = %s$' %round( gradient_SF,2 ),transform=plt.gca().transAxes )
+            plt.text( 0.7, 0.7 , r'$\nabla_{\rm SF} = %s$' %round( gradient_sf,2 ),transform=plt.gca().transAxes,
+                     color='green' )
+            
             plt.tight_layout()
             plt.savefig( './FIRE_diagnostics/' + str(tag) + '_FIRE_profile.pdf', bbox_inches='tight' )
         
@@ -189,29 +205,30 @@ def calczgrad_FIRE(part,species_name='gas',weight_name='mass',distance_max=30,di
     
     SFR_10_kpc = np.sum(gas_sfr[ part['gas'].prop(f'{host_name}.distance.total', part_indices) < 10 ])
 
+    print(f"SFR: {SFR_10_kpc:0.3f}")
+    
     gas_mass = part['gas'].prop('mass', part_indices)
     gas_pos  = part['gas'].prop(f'{host_name}.distance', part_indices)
     gas_vel  = part['gas'].prop(f'{host_name}.velocity', part_indices)
     
-    ZO = part['gas'].prop( 'massfraction.o', part_indices)
-    XH = part['gas'].prop( 'massfraction.h', part_indices)
+    ZO = part['gas'].prop( 'massfraction.o', part_indices )
+    XH = part['gas'].prop( 'massfraction.h', part_indices )
 
     ri, ro  = calc_rsfr_io(gas_pos, gas_sfr)
     riprime = ri + 0.25 * (ro - ri)
     
-    ############## TO DO ################
-    # Need to add cuts here for SFR > 0 and (ro - riprime) > 1 kpc
-    #####################################
+    # Criteria 1: Only interested in SF galaxies
+    # Criteria 2: Only interested in galaxies with SF region of > 1 kpc
+    # Criteria 3: Need to have at least 1e4 gas particles
     
     criteria1 = SFR_10_kpc > 0
     criteria2 = ( ro - riprime ) > 1
-              
-#     print( 'SFR within 10 kpc: %s Msun/yr' %SFR_10_kpc )
-#     print( 'Size of SF region: %s kpc' %(ro - riprime) )
+    criteria3 = len(gas_pos) > 1e4 ## Add this for stars too?
     
     robs, stdrs, medohs, stdohs, rs, xyoh = [],[],[],[],[],[]
+    sf_r, sf_Z = [], []
     
-    if criteria1 & criteria2:
+    if criteria1 & criteria2 & criteria3:
     
         incl = calc_incl(gas_pos, gas_vel, gas_mass, ri, ro)
 
@@ -223,7 +240,8 @@ def calczgrad_FIRE(part,species_name='gas',weight_name='mass',distance_max=30,di
             weights = part[species_name].prop(weight_name, part_indices)
 
         # keep only particles within distance limits along each dimension
-        masks = positions[:, 0] <= distance_max
+        masks = (positions[:, 0] <= distance_max)
+        print('total SF cells: ',sum(gas_sfr > 0))
         for dimen_i in [0,1]: # I only care about x, y
             masks *= (positions[:, dimen_i] >= -distance_max) * (positions[:, dimen_i] <= distance_max)
 
@@ -232,6 +250,15 @@ def calczgrad_FIRE(part,species_name='gas',weight_name='mass',distance_max=30,di
         if weights is not None:
             weights = weights[masks]
 
+        __radius__ = np.sqrt(positions[:,0]**2 + positions[:,1]**2 + positions[:,2]**2)
+        sf_r = __radius__[gas_sfr[masks] > 0]
+        sf_O = np.multiply( gas_mass[masks], ZO[masks] )
+        sf_H = np.multiply( gas_mass[masks], XH[masks] )
+        sf_Z = np.log10(sf_O/sf_H * (1.000E+00 / 1.600E+01)) + 1.200E+01
+        sf_Z = sf_Z[gas_sfr[masks] > 0]
+        
+        print(len(sf_r), )
+        
         # get number of bins (pixels) along each dimension
         position_bin_number = int(np.round(2 * np.max(distance_max) / distance_bin_width))
 
@@ -310,8 +337,8 @@ def calczgrad_FIRE(part,species_name='gas',weight_name='mass',distance_max=30,di
                 stdrs [i] =    np.std(  rs[idx])
                 medohs[i] = np.median(xyoh[idx])
                 stdohs[i] =    np.std(xyoh[idx])
-        
-    return robs, stdrs, medohs, stdohs, rs, xyoh, ri, ro, riprime
+    
+    return robs, stdrs, medohs, stdohs, rs, xyoh, ri, ro, riprime, sf_r, sf_Z
 
 
 if __name__ == "__main__":
@@ -370,12 +397,14 @@ if __name__ == "__main__":
     ]
     
     all_sims_high_redshift = [
-        'z5m09a','z5m10a','z5m10c','z5m10e','z5m11a','z5m11c','z5m11e','z5m11g','z5m11i','z5m12b','z5m12d',
+        # 'z5m09a','z5m10a',
+        # 'z5m10c','z5m10e',
+        'z5m11a','z5m11c','z5m11e','z5m11g','z5m11i','z5m12b','z5m12d',
         'z5m09b','z5m10b','z5m10d','z5m10f','z5m11b','z5m11d','z5m11f','z5m11h','z5m12a','z5m12c','z5m12e'
     ]
     
     SAVE_DATA   = False
-    which_suite = 'core'
+    which_suite = 'high_redshift'
     
     try:
         h5py.File( 'FIRE_Gradients.hdf5', 'r+' )

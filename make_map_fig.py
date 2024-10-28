@@ -5,10 +5,14 @@ import matplotlib as mpl
 mpl.use('agg')
 import matplotlib.pyplot as plt
 
-from sfms import sfmscut, center, calc_rsfr_io, calc_incl, trans, calczgrad, calcrsfr, grad_valid, calc_sfr_prof
+from sfms import (
+    sfmscut, center, calc_rsfr_io, calc_incl, trans,
+    calczgrad, calcrsfr, grad_valid, calc_sfr_prof
+)
 from matplotlib.colors import LogNorm, LinearSegmentedColormap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from tqdm import tqdm
+import cmasher as cmr
 
 from os import path, mkdir
 
@@ -38,11 +42,11 @@ mpl.rcParams['text.usetex']        = True
 mpl.rcParams['font.family']        = 'serif'
 mpl.rcParams['font.size']          = 20
 
-fs_large = 22
-fs_small = 18
+fs_large = 28
+fs_small = 24
 
 mpl.rcParams['font.size'] = fs_large
-mpl.rcParams['axes.linewidth']  = 2
+mpl.rcParams['axes.linewidth']  = 2.5
 mpl.rcParams['xtick.direction'] = 'in'
 mpl.rcParams['ytick.direction'] = 'in'
 mpl.rcParams['xtick.minor.visible'] = 'true'
@@ -51,10 +55,10 @@ mpl.rcParams['xtick.major.width'] = 1.5
 mpl.rcParams['ytick.major.width'] = 1.5
 mpl.rcParams['xtick.minor.width'] = 1.0
 mpl.rcParams['ytick.minor.width'] = 1.0
-mpl.rcParams['xtick.major.size']  = 7.5
-mpl.rcParams['ytick.major.size']  = 7.5
-mpl.rcParams['xtick.minor.size']  = 3.5
-mpl.rcParams['ytick.minor.size']  = 3.5
+mpl.rcParams['xtick.major.size']  = 10
+mpl.rcParams['ytick.major.size']  = 10
+mpl.rcParams['xtick.minor.size']  = 5
+mpl.rcParams['ytick.minor.size']  = 5
 mpl.rcParams['xtick.top']   = True
 mpl.rcParams['ytick.right'] = True
 
@@ -115,9 +119,10 @@ z_to_snap_high_redshift = {
     10.0:20 
 }
 
-black_blue= mpl.colors.LinearSegmentedColormap.from_list("custom",["black","#161368","#1B228A","#33E3FF"])
+c1 = cmr.get_sub_cmap('cmr.copper_s', 0.4, 1)#'cmr.apple'#cmr.get_sub_cmap('cmr.iceburn', 0.5, 1.0)
+c2 = cmr.get_sub_cmap('cmr.pride', 0.2, 1)
 
-def tng(snap, ID, ax_map, ax_map2, ax_prof, fig):
+def tng(snap, ID, ax_map, ax_map2, ax_prof, fig, redshift=5.0):
     
     run     = 'L35n2160TNG'
     person  = 'alexgarcia'
@@ -184,42 +189,50 @@ def tng(snap, ID, ax_map, ax_map2, ax_prof, fig):
     r, rerr, oh, oherr, _rprof_, _ohprof_, _massmap_, _ohmap_ = make_map(gas_pos, gas_mass, gas_rho, GFM_Metal,
                                                                          rmax, res, which='TNG')
     
-    mappable=ax_map.imshow( _massmap_, cmap=plt.cm.inferno, extent=[-10,10,-10,10], norm=LogNorm() )
-    cbaxes = fig.add_axes([0.060, 0.875, 0.125, 0.02]) #Add position (left, bottom, width, height)
+    mappable=ax_map.imshow( _massmap_, cmap=c1, extent=[-10,10,-10,10], norm=LogNorm() )
+    cbaxes = fig.add_axes([0.0725, 0.88, 0.205, 0.02]) #Add position (left, bottom, width, height)
     cb     = plt.colorbar(mappable, cax = cbaxes, orientation='horizontal') 
-    cb.ax.tick_params(labelsize=15)
+    cb.ax.tick_params(labelsize=fs_small)
     
-    ymin, ymax = 7,9.5
+    ymin, ymax = 7.66,9.25
     hist_mask = (_ohprof_ > ymin) & (_ohprof_ < ymax)
     
     ax_prof.hist2d( _rprof_[hist_mask], _ohprof_[hist_mask], cmap=plt.cm.Greys, bins=(100,100) )
-    ax_prof.plot( r, oh, color='blue', lw=2.0 )
+    ax_prof.plot( r, oh, color='blue', lw=3.5 )
     
-    ymin, ymax = 7,9
+    ymin, ymax = 7,9.0
     
-    mappable=ax_map2.imshow( _ohmap_, cmap=black_blue, extent=[-10,10,-10,10], vmin=ymin, vmax=ymax )
-    cbaxes = fig.add_axes([0.215, 0.875, 0.125, 0.02]) #Add position (left, bottom, width, height)
+    mappable=ax_map2.imshow( _ohmap_, cmap=c2, extent=[-10,10,-10,10], vmin=ymin, vmax=ymax )
+    cbaxes = fig.add_axes([0.301, 0.88, 0.205, 0.02]) #Add position (left, bottom, width, height)
     cb     = plt.colorbar(mappable, cax = cbaxes, orientation='horizontal') 
-    cb.ax.tick_params(labelsize=15)
+    cb.ax.tick_params(labelsize=fs_small)
     
     fit_mask = ( r > riprime ) & ( r < ro ) & ~np.isnan(oh)
     gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
     
-    ax_prof.plot( r, gradient_SF * r + intercept_SF, color='red' )
+    ax_prof.plot( r, gradient_SF * r + intercept_SF, color='red', lw=3.5 )
             
-    ax_prof.axvline( riprime, color='k', linestyle='--' )
-    ax_prof.axvline( ro     , color='k', linestyle='--' )
+    ax_prof.axvline( riprime, color='k', linestyle='--', linewidth=2.5 )
+    ax_prof.axvline( ro     , color='k', linestyle='--', linewidth=2.5 )
+    
+    ymin, ymax = ax_prof.get_ylim()
+    ax_prof.text( riprime*1.075, 7.8, r'${\rm Star~Forming~Region}$', rotation=90, fontsize=fs_small-3 )
+    ax_prof.fill_between( np.linspace(riprime,ro), 0, 10, alpha=0.175, color='gray' )
+    ax_prof.set_ylim(ymin, ymax)
     
     ax_prof.set_xlabel( r'${\rm Radius~(kpc)}$' )
     ax_prof.set_ylabel( r'$\log{\rm O/H} + 12~({\rm dex})$' )
     
-    ax_prof.text( 0.975, 0.9   , r'${\rm TNG}~z=5$', transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.975, 0.825 , r'$\log(M_*/M_\odot) = %s~$' %round(np.log10(this_stellar_mass),2),
+    ax_prof.text( 0.975, 0.925, r'${\rm TNG}~z=%.1f$' %redshift,
+                  transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
+    ax_prof.text( 0.975, 0.85, r'$\log(M_*/M_\odot) = $' + ' ' + f'${np.log10(this_stellar_mass):.2f}$',
                  transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.975, 0.75, r'$\nabla = %s\,({\rm dex/kpc})$' %round(gradient_SF,2), transform=ax_prof.transAxes,
+    ax_prof.text( 0.975, 0.775 , r'$\nabla = %s\,({\rm dex/kpc})$' %round(gradient_SF,2), transform=ax_prof.transAxes,
                  ha='right', fontsize=fs_small )
     
-    ax_prof.set_yticks([7,8,9])
+    ax_prof.set_yticks([8,9])
+    ax_prof.set_xticks(np.arange(0,14,2))
+
     
     plot_circle( ax_map, riprime )
     plot_circle( ax_map, ro )
@@ -320,12 +333,12 @@ def eagle(snap, galaxy, group_cat,ax_map, ax_map2, ax_prof, fig, file_ext):
                                                                           EAGLE_rho=True, rhocutidx=sf_idx,
                                                                           which='EAGLE' )
     
-    mappable=ax_map.imshow( _massmap_, cmap=plt.cm.inferno, extent=[-10,10,-10,10], norm=LogNorm() )
+    mappable=ax_map.imshow( _massmap_, cmap=c1, extent=[-10,10,-10,10], norm=LogNorm() )
     cbaxes = fig.add_axes([0.37, 0.875, 0.125, 0.02]) #Add position (left, bottom, width, height)
     cb     = plt.colorbar(mappable, cax = cbaxes, orientation='horizontal') 
-    cb.ax.tick_params(labelsize=15)
+    cb.ax.tick_params(labelsize=fs_small)
     
-    ymin, ymax = 7,9.25
+    ymin, ymax = 7,9.5
     hist_mask = (_ohprof_ > ymin) & (_ohprof_ < ymax)
     
     ax_prof.hist2d( _rprof_[hist_mask], _ohprof_[hist_mask], cmap=plt.cm.Greys, bins=(100,100) )
@@ -333,10 +346,10 @@ def eagle(snap, galaxy, group_cat,ax_map, ax_map2, ax_prof, fig, file_ext):
     
     ymin, ymax = 7,9#ax_prof.get_ylim()
     
-    mappable=ax_map2.imshow( _ohmap_, cmap=black_blue, extent=[-10,10,-10,10], vmin=ymin, vmax=ymax )
+    mappable=ax_map2.imshow( _ohmap_, cmap=c2, extent=[-10,10,-10,10], vmin=ymin, vmax=ymax )
     cbaxes = fig.add_axes([0.5275, 0.875, 0.125, 0.02]) #Add position (left, bottom, width, height)
     cb     = plt.colorbar(mappable, cax = cbaxes, orientation='horizontal') 
-    cb.ax.tick_params(labelsize=15)
+    cb.ax.tick_params(labelsize=fs_small)
     
     fit_mask = ( r > riprime ) & ( r < ro ) & ~np.isnan(oh)
     gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
@@ -381,7 +394,7 @@ def fire(location, redshift, snap, ptType, tag, ax_map, ax_map2, ax_prof, fig):
     this_RSHM     = RSHMs    [arg_most_massive]
     
     print('%'*100)
-    print( 'Stellar Mass at z=%s: %s' %(redshift, this_mass ))
+    print('Stellar Mass at z=%s: %s' %(redshift, this_mass ))
     print('%'*100)
     
     h   = grp_cat.Cosmology['hubble']
@@ -394,41 +407,50 @@ def fire(location, redshift, snap, ptType, tag, ax_map, ax_map2, ax_prof, fig):
     
     r, rerr, oh, oherr, _rprof_,_ohprof_, _xym_, _xyoh_, riprime, ro = make_map_FIRE(part)
     
-    mappable=ax_map.imshow( _xym_, cmap=plt.cm.inferno, norm=LogNorm(), extent=[-10,10,-10,10])
-    cbaxes = fig.add_axes([0.680, 0.875, 0.125, 0.02]) #Add position (left, bottom, width, height)
+    mappable=ax_map.imshow( _xym_, cmap=c1, norm=LogNorm(), extent=[-10,10,-10,10])
+    cbaxes = fig.add_axes([0.5275, 0.88, 0.205, 0.02]) #Add position (left, bottom, width, height)
     cb     = plt.colorbar(mappable, cax = cbaxes, orientation='horizontal') 
-    cb.ax.tick_params(labelsize=15)
+    cb.ax.tick_params(labelsize=fs_small)
     
-    ymin, ymax = 8,9
+    ymin, ymax = 7.66,9.25
     hist_mask = (_ohprof_ > ymin) & (_ohprof_ < ymax) 
     
     ax_prof.hist2d( _rprof_[hist_mask], _ohprof_[hist_mask], cmap=plt.cm.Greys, bins=(100,100) )
-    ax_prof.plot( r, oh, color='blue', lw=2.0 )
+    ax_prof.plot( r, oh, color='blue', lw=3.5 )
     
-    ymin, ymax = 8,9.5
+    ymin, ymax = 8.0, 9.5
     
-    mappable=ax_map2.imshow( _xyoh_, cmap=black_blue, extent=[-10,10,-10,10], vmin=ymin, vmax=ymax)
-    cbaxes = fig.add_axes([0.835, 0.875, 0.125, 0.02]) #Add position (left, bottom, width, height)
+    mappable=ax_map2.imshow( _xyoh_, cmap=c2, extent=[-10,10,-10,10], vmin=ymin, vmax=ymax)
+    cbaxes = fig.add_axes([0.755, 0.88, 0.205, 0.02]) #Add position (left, bottom, width, height)
     cb     = plt.colorbar(mappable, cax = cbaxes, orientation='horizontal') 
-    cb.ax.tick_params(labelsize=15)
+    cb.ax.tick_params(labelsize=fs_small)
     
     fit_mask = ( r > riprime ) & ( r < ro ) & ~np.isnan(oh)
     gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
     
-    ax_prof.plot( r, gradient_SF * r + intercept_SF, color='red' )
+    ax_prof.plot( r, gradient_SF * r + intercept_SF, color='red', lw=3.5 )
             
-    ax_prof.axvline( riprime, color='k', linestyle='--' )
-    ax_prof.axvline( ro     , color='k', linestyle='--' )
+    ax_prof.axvline( riprime, color='k', linestyle='--', linewidth=2.5 )
+    ax_prof.axvline( ro     , color='k', linestyle='--', linewidth=2.5 )
+    
+    # ymin, ymax = ax_prof.get_ylim()
+    ax_prof.text( riprime*1.075, 7.8, r'${\rm Star~Forming~Region}$', rotation=90, fontsize=fs_small-3 )
+    ax_prof.fill_between( np.linspace(riprime,ro), 0, 10, alpha=0.175, color='gray' )
+    # ax_prof.set_ylim(ymin, ymax)
+    ax_prof.set_ylim(7.66,9.25)
+    ax_prof.set_xlim(0,20) ## COMMENT ME OUT
     
     ax_prof.set_xlabel( r'${\rm Radius~(kpc)}$' )
     
-    ax_prof.text( 0.975, 0.9  , r'${\rm FIRE}~z=5$', transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.975, 0.825, r'$\log(M_*/M_\odot) = %s~$' %round(this_mass,2),
+    ax_prof.text( 0.975, 0.925, r'${\rm FIRE}~z=%.1f$' %redshift,
+                  transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
+    ax_prof.text( 0.975, 0.85, r'$\log(M_*/M_\odot) = %s~$' %round(this_mass,2),
                  transform=ax_prof.transAxes, ha='right', fontsize=fs_small )
-    ax_prof.text( 0.975, 0.75 , r'$\nabla = %s\,({\rm dex/kpc})$' %round(gradient_SF,2), transform=ax_prof.transAxes,
+    ax_prof.text( 0.975, 0.775, r'$\nabla = %s\,({\rm dex/kpc})$' %round(gradient_SF,2), transform=ax_prof.transAxes,
                  ha='right', fontsize=fs_small )
     
     ax_prof.set_yticks([8,9])
+    ax_prof.set_xticks(np.arange(0,14,2))
     
     plot_circle( ax_map, riprime )
     plot_circle( ax_map, ro )
@@ -527,19 +549,8 @@ def make_map(pos, m, hrho, zm9, rmax, res, O_index=4, H_index=0,
     # Search area. First 0.05 kpc, then 0.125, 0.25, 0.5, and finally 1.0 kpc
     bpass  = [5.000E-02, 1.250E-01, 2.500E-01, 5.000E-01, 1.000E+00]
     
-    # Different resolutions need difference pixel sizes
-    if (res == 2160): # TNG50-1 equiv.
-        pixl   =  1.000E-01
-        nmin   =  16 #min particles needed to be observationally equivalent
-    elif (res == 1080): # TNG50-2 equiv.
-        pixl   =  2.500E-01
-        nmin   =  8
-    elif (res == 540): # TNG50-3 equiv.
-        pixl   =  5.000E-01
-        nmin   =  4
-    elif (res == 270): # TNG50-4 equiv.
-        pixl   =  1.000E+00
-        nmin   =  2
+    pixl   =  1.000E-01
+    nmin   =  16 #min particles needed to be observationally equivalent
         
     dr     =  1.00E-01 #kpc
     pixa   =  pixl**2.000E+00
@@ -692,9 +703,9 @@ def make_map_FIRE( part,species_name='gas',weight_name='mass',distance_max=10,di
             weights = part[species_name].prop(weight_name, part_indices)
 
         # keep only particles within distance limits along each dimension
-        masks = positions[:, 0] <= distance_max
-        for dimen_i in [0,1]: # I only care about x, y
-            masks *= (positions[:, dimen_i] >= -distance_max) * (positions[:, dimen_i] <= distance_max)
+        masks = (positions[:, 0] <= distance_max) & (gas_sfr > 0)
+        # for dimen_i in [0,1]: # I only care about x, y
+        #     masks *= (positions[:, dimen_i] >= -distance_max) * (positions[:, dimen_i] <= distance_max)
 
         # keep only positions and weights within distance limits
         positions = positions[masks]
@@ -721,14 +732,14 @@ def make_map_FIRE( part,species_name='gas',weight_name='mass',distance_max=10,di
                 xlen = distance_max,
                 pixels = n_pixels, set_aspect_ratio = 1.0,
                 set_maxden = 1.0e10, ## (gadget units, 10^10 msun/kpc^2 = 10^4 msun/pc^2)
-                set_dynrng = 1.0e12  )
+                set_dynrng = 1.0e14  )
             
             Hmassmap,image = makepic.contour_makepic( positions[:,0], positions[:,1], positions[:,2], hsml,
                 np.multiply( gas_mass, XH ),
                 xlen = distance_max,
                 pixels = n_pixels, set_aspect_ratio = 1.0,
                 set_maxden = 1.0e10, ## (gadget units, 10^10 msun/kpc^2 = 10^4 msun/pc^2)
-                set_dynrng = 1.0e12  )
+                set_dynrng = 1.0e14  )
             
             OH_map = Omassmap / Hmassmap
             OH_map = np.log10(OH_map) + 12

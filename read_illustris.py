@@ -62,9 +62,9 @@ def save_data(snap, out_dir, m_star_min=9.0, m_star_max=11.0, m_gas_min=9.0, res
     box_size = hdr['BoxSize']
     scf      = hdr['Time']
     h        = hdr['HubbleParam']
-    print('Scale-factor: %s' %round(scf,1))
+    # print('Scale-factor: %s' %round(scf,1))
     z0       = (1.00E+00 / scf - 1.00E+00)
-    print('Redshift: %s' %round(z0,1))
+    # print('Redshift: %s' %round(z0,1))
     fields = ['SubhaloGasMetallicity', 'SubhaloPos', 'SubhaloMass', 'SubhaloVel', 'SubhaloSFR',
               'SubhaloMassType','SubhaloGasMetallicitySfr','SubhaloHalfmassRadType']
     sub_cat = il.groupcat.loadSubhalos(out_dir, snap, fields = fields)
@@ -72,13 +72,13 @@ def save_data(snap, out_dir, m_star_min=9.0, m_star_max=11.0, m_gas_min=9.0, res
     sub_cat['SubhaloMass']     *= 1.000E+10 / h
     sub_cat['SubhaloMassType'] *= 1.000E+10 / h
     
-    sfms_idx = sfmscut(sub_cat['SubhaloMassType'][subs,4], sub_cat['SubhaloSFR'][subs],
-                       m_star_min=m_star_min,m_star_max=m_star_max, m_gas_min=m_gas_min)
+#     sfms_idx = sfmscut(sub_cat['SubhaloMassType'][subs,4], sub_cat['SubhaloSFR'][subs],
+#                        m_star_min=m_star_min,m_star_max=m_star_max, m_gas_min=m_gas_min)
     
     subs     = subs[(sub_cat['SubhaloMassType'][subs,4] > 1.000E+01**m_star_min) & 
                     (sub_cat['SubhaloMassType'][subs,4] < 1.000E+01**m_star_max) &
                     (sub_cat['SubhaloMassType'][subs,0] > 1.000E+01**m_gas_min) &
-                    (sfms_idx) ]    
+                    (sub_cat['SubhaloSFR'][subs] > 0) ]    
     
     print('Number of SF galaxies: %s' %len(subs))
     
@@ -87,10 +87,30 @@ def save_data(snap, out_dir, m_star_min=9.0, m_star_max=11.0, m_gas_min=9.0, res
     stellarHalfmassRad *= (scf / h)
     
     for sub in tqdm(subs):
+        # try:
         get_profile(out_dir, snap, sub, sub_cat, box_size,
-                    scf, h, res, sf_region=True, plot=False,
+                    scf, h, res, sf_region=False, plot=False,
                     where_to_save=where_to_save)
+#         except:
+#             print( 'Subhalo %s failed' %sub )
+#             if where_to_save:
+#                 this_subhalo = where_to_save.create_group('Subhalo_%s' %sub)
 
+#                 this_subhalo.create_dataset( 'Failed', data=True )
+
+#                 this_subhalo.create_dataset( 'StarFormingRegion' , data = np.nan )
+#                 this_subhalo.create_dataset( 'ObservationalEquiv', data = np.nan )
+#                 this_subhalo.create_dataset( 'StellarMass'       , data = np.nan )
+#                 this_subhalo.create_dataset( 'StarFormationRate' , data = np.nan )
+#                 this_subhalo.create_dataset( 'StellarHalfMassRad', data = np.nan )
+#                 this_subhalo.create_dataset( 'SFRHalfMassRad'    , data = np.nan )
+#                 this_subhalo.create_dataset( 'Redshift'          , data = np.nan )
+#                 this_subhalo.create_dataset( 'Profile_radius'    , data = np.nan )
+#                 this_subhalo.create_dataset( 'Profile_oh'        , data = np.nan )
+#                 this_subhalo.create_dataset( 'Radius_in'         , data = np.nan )
+#                 this_subhalo.create_dataset( 'Radius_inprime'    , data = np.nan )
+#                 this_subhalo.create_dataset( 'Radius_out'        , data = np.nan )
+            
 def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
                 sf_region=True, plot=False, where_to_save=None):
     
@@ -145,13 +165,19 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
     gas_pos  = trans(gas_pos, incl)
     gas_vel  = trans(gas_vel, incl)
     
-    r, rerr, oh, oherr, _rad_, _oh_ = calczgrad(gas_pos, gas_mass, gas_rho, GFM_Metal, rmax, res)
+    no_SF_cut = True ### do not cut at nH > 0.13 cc
     
+    r, rerr, oh, oherr, _rad_, _oh_ = calczgrad(gas_pos, gas_mass, gas_rho, GFM_Metal, rmax, res, no_SF_cut=no_SF_cut)
+  
+    broken_flag = False
+    if len(r) == 1 and np.isnan(r[0]):
+        broken_flag = True
+
     gradient_OE = np.nan
     gradient_SF = np.nan
     
     rsmall, rbig = riprime, ro
-    if grad_valid(r, oh, rsmall, rbig):
+    if grad_valid(r, oh, rsmall, rbig) and not broken_flag:
         fit_mask = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
         gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
         
@@ -176,9 +202,14 @@ def get_profile(out_dir, snap, sub, sub_cat, box_size, scf, h, res,
 
             plt.text( 0.7, 0.9 , r'$z=%s$' %snap2zTNG[snap], transform=plt.gca().transAxes )
             plt.text( 0.7, 0.8 , r'$\log M_* = %s$' %round( sub_stellar_mass,2 ),transform=plt.gca().transAxes )
+            plt.text( 0.7, 0.7 , r'$\nabla = %s$' %round(gradient_SF,2), transform=plt.gca().transAxes)
             
             plt.tight_layout()
-            plt.savefig( './diagnostic_figs/' + str(sub) + '_TNG_profile.pdf', bbox_inches='tight' )
+            if no_SF_cut:
+                name = './diagnostic_figs/' + str(sub) + '_TNG_profile_noSFcut.pdf'
+            else:
+                name = './diagnostic_figs/' + str(sub) + '_TNG_profile.pdf'
+            plt.savefig( name, bbox_inches='tight' )
         
     rsmall, rbig = 0.5 * sub_SHM, 2.0 * sub_SHM
     if grad_valid(r, oh, rsmall, rbig):
@@ -218,17 +249,19 @@ if __name__ == "__main__":
 
     run  = 'L35n2160TNG'
     
-    SAVE_DATA = False
+    SAVE_DATA = True
+    
+    fname = 'TNG_Gradients_no_SF_cut.hdf5'
     
     try:
-        h5py.File( 'TNG_Gradients.hdf5', 'r+' )
+        h5py.File( fname, 'r+' )
     except:
-        with h5py.File( 'TNG_Gradients.hdf5', 'w' ) as f:
+        with h5py.File( fname, 'w' ) as f:
             print('file created')
     
     for redshift in z_to_snap_TNG.keys():
 
-        with h5py.File( 'TNG_Gradients.hdf5', 'r+' ) as gradients_file:
+        with h5py.File( fname, 'r+' ) as gradients_file:
             
             this_group = None
             if SAVE_DATA:
