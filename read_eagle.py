@@ -1,3 +1,4 @@
+import os
 import sys
 import h5py
 import numpy as np
@@ -5,10 +6,15 @@ import matplotlib as mpl
 mpl.use('agg')
 import matplotlib.pyplot as plt
 
+# from dotenv import load_dotenv
+# load_dotenv()
+
+EAGLE_log_in   = 'rbs016'#os.getenv('EAGLE_log_in')
+EAGLE_password = 'yigERne4'#os.getenv('EAGLE_password')
 EAGLE_SQL_TOOLS = '/home/alexgarcia/github/eagleSqlTools'
 sys.path.insert(1,EAGLE_SQL_TOOLS)
 import eagleSqlTools as sql
-con = sql.connect( "rbs016", password="yigERne4" )
+con = sql.connect( EAGLE_log_in, password=EAGLE_password )
 
 from sfms import sfmscut, center, calc_rsfr_io, calc_incl, trans, calczgrad, calcrsfr, grad_valid, calc_sfr_prof
 from matplotlib.colors import LogNorm
@@ -39,27 +45,7 @@ snap2zEAGLE = {
 # All atomic species tracked by EAGLE
 ALL_EAGLE_SPECIES = ["Carbon", "Helium", "Hydrogen", "Iron", "Magnesium", "Neon", "Nitrogen", "Oxygen", "Silicon"]
 
-mpl.rcParams['text.usetex']        = True
-# mpl.rcParams['text.latex.unicode'] = True
-mpl.rcParams['font.family']        = 'serif'
-mpl.rcParams['font.size']          = 20
-
-mpl.rcParams['font.size'] = 24
-mpl.rcParams['axes.linewidth']  = 2
-mpl.rcParams['xtick.direction'] = 'in'
-mpl.rcParams['ytick.direction'] = 'in'
-mpl.rcParams['xtick.minor.visible'] = 'true'
-mpl.rcParams['ytick.minor.visible'] = 'true'
-mpl.rcParams['xtick.major.width'] = 1.5
-mpl.rcParams['ytick.major.width'] = 1.5
-mpl.rcParams['xtick.minor.width'] = 1.0
-mpl.rcParams['ytick.minor.width'] = 1.0
-mpl.rcParams['xtick.major.size']  = 7.5
-mpl.rcParams['ytick.major.size']  = 7.5
-mpl.rcParams['xtick.minor.size']  = 3.5
-mpl.rcParams['ytick.minor.size']  = 3.5
-mpl.rcParams['xtick.top']   = True
-mpl.rcParams['ytick.right'] = True
+plt.style.use('mystyle.mplstyle')
 
 def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=10.0, m_star_max=11.0, m_gas_min=10.0,
                     verbose=False):
@@ -107,13 +93,13 @@ def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=10.0, m_sta
     star_mass = np.array(myData['Stellar_Mass'][:])
     SFR       = np.array(myData['SFR'][:])
     
-    sfms_idx = sfmscut(star_mass, SFR, m_star_min=m_star_min,
-                       m_star_max=m_star_max, m_gas_min=m_gas_min)
+    # sfms_idx = sfmscut(star_mass, SFR, m_star_min=m_star_min,
+    #                    m_star_max=m_star_max, m_gas_min=m_gas_min)
     
     SFG_mask = ((star_mass > 1.00E+01**(m_star_min)) &
                 (star_mass < 1.00E+01**(m_star_max)) &
                 (gas_mass  > 1.00E+01**(m_gas_min))  &
-                ~(sfms_idx))
+                (SFR > 0))
     
     # Save only star forming galaxies within our mass range
     for key in keys:
@@ -123,7 +109,7 @@ def get_SF_galaxies(snap, simulation_run='RefL0100N1504', m_star_min=10.0, m_sta
 
 def read_eagle_subhalo(file_path, group_index, snap, keys=['GroupNumber','SubGroupNumber'],
                        PartType=0, nfiles=256, sub_group_index=0, file_ext='z000p000',
-                       run='RefL0100N1504',species=["Oxygen","Hydrogen"]):
+                       run='RefL0100N1504',species=["Oxygen","Hydrogen"], look_up_file=''):
     req_keys = ['GroupNumber','SubGroupNumber']
     for _k in req_keys:
         if _k not in keys:
@@ -136,10 +122,9 @@ def read_eagle_subhalo(file_path, group_index, snap, keys=['GroupNumber','SubGro
             keys.append( atom )
     
     return_dic = {}
-    
+    # './%s_nSF_galaxies/snap_%s/file_lookup.npy' %(run,str(snap).zfill(3)) 
     # Check where the galaxy particle data is saved
-    galaxy_file_locator = np.load( './%s_SF_galaxies/snap_%s/file_lookup.npy' %(run,str(snap).zfill(3)) ,
-                                  allow_pickle=True).item()
+    galaxy_file_locator = np.load( look_up_file, allow_pickle=True ).item()
     
     files_to_look = galaxy_file_locator[group_index] 
     
@@ -218,8 +203,10 @@ def get_which_files(file_path, group_indeces, snap, nfiles=256,
             subgroup_mask = f['PartType0']['SubGroupNumber'][:] == 0
             unique_gals   = np.unique(f['PartType0']['GroupNumber'][subgroup_mask])
 
-            overlap_gals  = np.intersect1d(unique_gals, group_indeces, assume_unique=True)
-            
+            # overlap_gals  = np.intersect1d(unique_gals, group_indeces, assume_unique=True)
+            overlap_gals_mask = np.isin(unique_gals, group_indeces)
+            overlap_gals = unique_gals[overlap_gals_mask]
+                        
             for gal in overlap_gals:
                 if gal not in all_files:
                     all_files[gal] = [file_counter]
@@ -230,7 +217,7 @@ def get_which_files(file_path, group_indeces, snap, nfiles=256,
     np.save(save_loc, all_files)
     
 def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, plot=False,
-                 where_to_save=None):
+                 where_to_save=None, look_up_file=''):
     rmax = 1.00E+02
     
     sub_vel   = np.column_stack( (group_cat['sub_vel_x'], group_cat['sub_vel_y'], group_cat['sub_vel_z']) )
@@ -255,7 +242,8 @@ def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, 
     gas_data  = read_eagle_subhalo(EAGLE, galaxy, snap, PartType=0, file_ext=file_ext,
                                    keys=['Coordinates','Mass','Metallicity',
                                          'Density','StarFormationRate','Velocity',
-                                         'OnEquationOfState','ElementAbundance'], run=run)
+                                         'OnEquationOfState','ElementAbundance'],
+                                   run=run, look_up_file=look_up_file)
 
     gas_pos   = np.array(gas_data['Coordinates'      ])
     gas_vel   = np.array(gas_data['Velocity'         ])
@@ -313,14 +301,17 @@ def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, 
     GFM_Metal[:,7] = Oxygen
     
     r, rerr, oh, oherr, _rad_, _oh_ = calczgrad(gas_pos, gas_mass, gas_rho, GFM_Metal, rmax, res,
-                                                O_index = 7, H_index = 2, EAGLE_rho=True, rhocutidx=sf_idx)
-    
+                                                O_index = 7, H_index = 2, EAGLE_rho=True, rhocutidx=sf_idx,
+                                                no_SF_cut=True)
+    broken_flag = False
+    if len(r) == 1 and np.isnan(r[0]):
+        broken_flag = True
+
     gradient_OE = np.nan
     gradient_SF = np.nan
 
-    # Get Star forming region gradient (Hemler+21, Ma+17)
     rsmall, rbig = riprime, ro
-    if grad_valid(r, oh, rsmall, rbig):
+    if grad_valid(r, oh, rsmall, rbig) and not broken_flag:
         fit_mask     = ( r > rsmall ) & ( r < rbig ) & ~np.isnan(oh)
 
         gradient_SF, intercept_SF = np.polyfit( r[fit_mask], oh[fit_mask], 1 )
@@ -348,7 +339,8 @@ def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, 
             plt.text( 0.7, 0.8 , r'$\log M_* = %s$' %round( this_Mstar,2 ),transform=plt.gca().transAxes )
             
             plt.tight_layout()
-            plt.savefig( './diagnostic_figs/' + str(galaxy) + '_EAGLE_profile.pdf', bbox_inches='tight' )
+            plt.savefig( './diagnostic_figs/' + str(galaxy) + '_EAGLE_profile_%s.pdf' %res,
+                         bbox_inches='tight' )
        
     # Get observational equivalent gradient (Tissera+19,21, etc)
     rsmall, rbig = 0.5 * this_RSHM, 2.0 * this_RSHM
@@ -374,18 +366,19 @@ def reduce_eagle(snap, galaxy, run, group_cat, file_ext='', EAGLE='', res=1080, 
         this_subhalo.create_dataset( 'Radius_inprime'    , data = riprime          )
         this_subhalo.create_dataset( 'Radius_out'        , data = ro               )
     
+    return gradient_SF
+    
 def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_star_max=11.0, m_gas_min=9.0,
               where_to_save=None):
     # Note that I am only interested in central galaxies here... can be modified to include satellite
     
-    save_dir = '%s_nSF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' 
+    save_dir = '%s_SF_galaxies/' %sim_name + 'snap_%s' %str(snap).zfill(3) + '/' 
     
     # Get SF galaxies at this snapshot
     SF_galaxies = get_SF_galaxies(snap, simulation_run=sim_name, m_star_min=m_star_min,
                                   m_star_max=m_star_max, m_gas_min=m_gas_min,verbose=True)
     
-    print('Number of non star forming galaxies at snap %s: %s' %(snap,len(SF_galaxies['Grnr'])) )
-    
+    print('Number of SF galaxies: %s' %(len(SF_galaxies['Grnr'])) )
     ##### Save the group catalog info
     np.save(save_dir + 'grp_cat' + '.npy', SF_galaxies)
     
@@ -396,13 +389,33 @@ def save_data(snap, EAGLE, sim_name, file_ext='z000p000', m_star_min = 9.0, m_st
     get_which_files(EAGLE, subset, snap, 
                     save_loc=save_dir + 'file_lookup.npy',
                     file_ext=file_ext)
-    
+        
     group_cat = np.load( save_dir + 'grp_cat.npy', allow_pickle=True ).item()
     
     # Loop over all galaxies (save data if `where_to_save` is not None)
     for galaxy in tqdm(subset):
-        reduce_eagle(snap, galaxy, sim_name, group_cat, file_ext=file_ext, EAGLE=EAGLE,
-                     where_to_save=where_to_save, plot=False)
+        try:
+            reduce_eagle(snap, galaxy, sim_name, group_cat, file_ext=file_ext, EAGLE=EAGLE,
+                         where_to_save=where_to_save, plot=False, look_up_file=save_dir+'file_lookup.npy')
+        except:
+            print( 'Subhalo %s failed' %galaxy )
+            if where_to_save:
+                this_subhalo = where_to_save.create_group('Subhalo_%s' %galaxy)
+
+                this_subhalo.create_dataset( 'Failed', data=True )
+
+                this_subhalo.create_dataset( 'StarFormingRegion' , data = np.nan )
+                this_subhalo.create_dataset( 'ObservationalEquiv', data = np.nan )
+                this_subhalo.create_dataset( 'StellarMass'       , data = np.nan )
+                this_subhalo.create_dataset( 'StarFormationRate' , data = np.nan )
+                this_subhalo.create_dataset( 'StellarHalfMassRad', data = np.nan )
+                this_subhalo.create_dataset( 'SFRHalfMassRad'    , data = np.nan )
+                this_subhalo.create_dataset( 'Redshift'          , data = np.nan )
+                this_subhalo.create_dataset( 'Profile_radius'    , data = np.nan )
+                this_subhalo.create_dataset( 'Profile_oh'        , data = np.nan )
+                this_subhalo.create_dataset( 'Radius_in'         , data = np.nan )
+                this_subhalo.create_dataset( 'Radius_inprime'    , data = np.nan )
+                this_subhalo.create_dataset( 'Radius_out'        , data = np.nan )
             
 if __name__ == "__main__":
     # Match the file extension
@@ -433,7 +446,7 @@ if __name__ == "__main__":
     run  = 'RefL0100N1504'
     
     SAVE_DATA = True
-    file_name = 'EAGLE_Gradients_NSF.hdf5'
+    file_name = 'EAGLE_Gradients_no_SF_cut.hdf5'
     
     try:
         h5py.File( file_name, 'r+' )
@@ -441,7 +454,7 @@ if __name__ == "__main__":
         with h5py.File( file_name, 'w' ) as f:
             print('file created')
                 
-    for redshift in [0,1,2]:#np.arange(0,9):#z_to_snap_EAGLE.keys():
+    for redshift in [0]:#z_to_snap_EAGLE.keys():
         
         snap = z_to_snap_EAGLE[redshift]
         
